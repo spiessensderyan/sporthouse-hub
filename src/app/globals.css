@@ -2,26 +2,226 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/Satoshi-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-display: swap;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/Satoshi-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/Satoshi-Black.otf') format('opentype');
+  font-weight: 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Kurdis';
+  src: url('/fonts/Kurdis-VariableVF.ttf') format('truetype');
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+:root {
+  --font-satoshi: 'Satoshi', system-ui, sans-serif;
+  --font-kurdis:  'Kurdis',  system-ui, sans-serif;
+  --sh-green:     #3A913F;
+  --sh-green-dim: rgba(58,145,63,0.15);
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96) }
+  to   { opacity: 1; transform: scale(1) }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0 }
+  100% { background-position:  200% 0 }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5 }
+  50%       { opacity: 1 }
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    background-color: #0d0d0d;
+    background-image:
+      radial-gradient(ellipse 90% 55% at 0% 0%,    rgba(58,145,63,0.10) 0%, transparent 65%),
+      radial-gradient(ellipse 60% 45% at 100% 100%, rgba(59,130,246,0.06) 0%, transparent 65%),
+      radial-gradient(ellipse 50% 40% at 100% 0%,   rgba(168,85,247,0.04) 0%, transparent 60%);
+    color: #E2E2DF;
+    font-family: var(--font-satoshi);
+    @apply antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Noise texture overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-kurdis);
+    letter-spacing: -0.02em;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar        { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track  { background: transparent; }
+  ::-webkit-scrollbar-thumb  { background: #333333; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+  /* Selection */
+  ::selection {
+    background-color: rgba(58,145,63,0.3);
+    color: #ffffff;
+  }
+
+  /* Focus rings */
+  :focus-visible {
+    outline: 2px solid rgba(58,145,63,0.6);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Expert AI — clean system font (overrides global heading font) ──────────── */
+
+.expert-prose,
+.expert-prose h1,
+.expert-prose h2,
+.expert-prose h3,
+.expert-prose h4,
+.expert-prose h5,
+.expert-prose h6,
+.expert-prose p,
+.expert-prose li,
+.expert-prose strong,
+.expert-prose em,
+.expert-prose code,
+.expert-prose blockquote {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  letter-spacing: normal;
 }
 
+/* ── Utilities ──────────────────────────────────────────────────────────────── */
+
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+
+  /* Glassmorphism */
+  .glass {
+    background: rgba(22,22,22,0.88);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255,255,255,0.10);
+  }
+
+  /* Gradient text — white fade */
+  .text-gradient {
+    background: linear-gradient(180deg, #ffffff 20%, #71717a 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient text — green accent */
+  .text-gradient-green {
+    background: linear-gradient(135deg, #5ab660 0%, #3A913F 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Card with subtle top-shine border */
+  .card {
+    position: relative;
+    background: rgba(22,22,22,0.97);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);
+    pointer-events: none;
+  }
+
+  /* Animate in */
+  .animate-fade-in  { animation: fadeIn  0.2s ease both; }
+  .animate-slide-up { animation: slideUp 0.22s cubic-bezier(0.16,1,0.3,1) both; }
+  .animate-scale-in { animation: scaleIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    background: linear-gradient(90deg, #161616 25%, #1e1e1e 50%, #161616 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Card hover — lift */
+  .card-hover {
+    transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,255,255,0.1) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  /* Tool card — CSS-only colored glow */
+  .tool-card {
+    transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .tool-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 8px 32px color-mix(in srgb, var(--tool-color, #3A913F) 18%, transparent),
+      0 1px 3px rgba(0,0,0,0.6);
+    border-color: color-mix(in srgb, var(--tool-color, #3A913F) 30%, transparent) !important;
+  }
+
+  /* Section label */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7d7d7a;
   }
 }
