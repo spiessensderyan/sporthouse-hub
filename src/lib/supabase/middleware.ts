@@ -1,14 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
-
-function isAuthorized(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null): boolean {
-  if (!user) return false
-  const sections: string[] = (user.user_metadata?.permissions as { sections?: string[] })?.sections ?? []
-  return ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer') || user.user_metadata?.allowed === true
-}
-
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -39,37 +31,30 @@ export async function updateSession(request: NextRequest) {
   const isLoginPage  = pathname.startsWith('/login')
   const isPortalPage = pathname.startsWith('/portal')
   const isApiPage    = pathname.startsWith('/api')
+  const isCallbackPage = pathname.startsWith('/auth')
 
   // Unauthenticated → login
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isCallbackPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   if (user) {
-    const authorized = isAuthorized(user)
-
-    // Authorized user on login page → dashboard
-    if (authorized && isLoginPage) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
-
-    // Freelancer trying to access main app → redirect to portal
     const isFreelancer = user.user_metadata?.freelancer === true
-    if (!authorized && isFreelancer && !isPortalPage && !isApiPage && !isLoginPage) {
+
+    // Freelancer on login page or main app → portal
+    if (isFreelancer && !isPortalPage && !isApiPage && !isCallbackPage) {
       const url = request.nextUrl.clone()
       url.pathname = '/portal'
       return NextResponse.redirect(url)
     }
 
-    // Unauthorized non-freelancer trying to access main app
-    if (!authorized && !isFreelancer && !isLoginPage && !isPortalPage && !isApiPage) {
-      await supabase.auth.signOut()
+    // Logged-in non-freelancer on login page → dashboard
+    // (Supabase "disable signups" ensures only pre-created users reach here)
+    if (!isFreelancer && isLoginPage) {
       const url = request.nextUrl.clone()
-      url.pathname = '/login'
+      url.pathname = '/dashboard'
       return NextResponse.redirect(url)
     }
   }
