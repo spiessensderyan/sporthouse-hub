@@ -43,8 +43,16 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   // Prevent self-deletion
   if (id === caller.id) return new Response('Je kan jezelf niet verwijderen', { status: 400 })
 
-  const admin = createAdminClient()
-  const { error } = await admin.auth.admin.deleteUser(id)
-  if (error) return new Response(error.message, { status: 500 })
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${id}`,
+    {
+      method: 'DELETE',
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+    }
+  )
+  if (!res.ok) return new Response(await res.text(), { status: res.status })
   return new Response(null, { status: 204 })
 }

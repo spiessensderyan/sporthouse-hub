@@ -44,8 +44,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/portal`)
   }
 
-  // Not authorized — immediately delete and sign out, nothing is stored
-  await admin.auth.admin.deleteUser(user.id)
+  // Not authorized — immediately delete via REST API and sign out
+  await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users/${user.id}`,
+    {
+      method: 'DELETE',
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+    }
+  )
   await supabase.auth.signOut()
 
   return NextResponse.redirect(`${origin}/login?error=unauthorized`)
