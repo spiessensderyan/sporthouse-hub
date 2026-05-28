@@ -1,6 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+
+function isAuthorized(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null): boolean {
+  if (!user) return false
+  const sections: string[] = (user.user_metadata?.permissions as { sections?: string[] })?.sections ?? []
+  return ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer') || user.user_metadata?.allowed === true
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -27,19 +35,35 @@ export async function updateSession(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isPublicPage = isAuthPage
+  const pathname = request.nextUrl.pathname
+  const isLoginPage  = pathname.startsWith('/login')
+  const isPortalPage = pathname.startsWith('/portal')
+  const isApiPage    = pathname.startsWith('/api')
 
-  if (!user && !isPublicPage) {
+  // Unauthenticated → login
+  if (!user && !isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthPage) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+  if (user) {
+    const authorized = isAuthorized(user)
+
+    // Authorized user on login page → dashboard
+    if (authorized && isLoginPage) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    // Unauthorized user trying to access main app (not portal, not api, not login)
+    if (!authorized && !isLoginPage && !isPortalPage && !isApiPage) {
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse
