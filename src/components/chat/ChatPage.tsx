@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Send, Hash, Plus, Loader2, Trash2, X, ChevronDown, ChevronRight, MoreHorizontal, Pencil, FolderPlus, Paperclip, FileText, Download, GripVertical, Smile } from 'lucide-react'
+import Picker from '@emoji-mart/react'
+import data from '@emoji-mart/data'
 import {
   DndContext, DragEndEvent,
   PointerSensor, useSensor, useSensors, closestCenter,
@@ -1046,19 +1048,18 @@ export default function ChatPage() {
                           </button>
                           {emojiPickerMsgId === msg.id && (
                             <div
-                              className="absolute right-0 bottom-full mb-1 flex gap-0.5 p-1 rounded-xl z-20"
-                              style={{ background: '#1f1f1f', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+                              className="absolute right-0 bottom-full mb-1 z-20"
                               onClick={e => e.stopPropagation()}
                             >
-                              {['👍', '❤️', '😂', '🔥', '😮', '😢'].map(emoji => (
-                                <button
-                                  key={emoji}
-                                  onClick={() => toggleReaction(msg.id, emoji)}
-                                  className="text-base hover:scale-125 transition-transform w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
+                              <Picker
+                                data={data}
+                                onEmojiSelect={(e: { native: string }) => toggleReaction(msg.id, e.native)}
+                                theme="dark"
+                                locale="nl"
+                                previewPosition="none"
+                                skinTonePosition="none"
+                                set="native"
+                              />
                             </div>
                           )}
                         </div>
