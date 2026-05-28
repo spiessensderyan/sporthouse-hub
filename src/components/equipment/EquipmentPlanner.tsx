@@ -212,23 +212,26 @@ function AddEquipmentModal({
   onClose: () => void
   onCreated: (item: EquipmentItem) => void
 }) {
-  const [name,        setName]        = useState('')
-  const [category,    setCategory]    = useState('')
-  const [description, setDescription] = useState('')
-  const [saving,      setSaving]      = useState(false)
-  const [error,       setError]       = useState('')
+  const [name,          setName]          = useState('')
+  const [category,      setCategory]      = useState('')
+  const [newCategory,   setNewCategory]   = useState('')
+  const [customCat,     setCustomCat]     = useState(false)
+  const [description,   setDescription]  = useState('')
+  const [saving,        setSaving]        = useState(false)
+  const [error,         setError]         = useState('')
 
   const allCategories = CATEGORY_ORDER
+  const effectiveCategory = customCat ? newCategory.trim() : category
 
   async function handleSubmit() {
-    if (!name.trim())     { setError('Geef een naam op.'); return }
-    if (!category.trim()) { setError('Selecteer een categorie.'); return }
+    if (!name.trim())              { setError('Geef een naam op.'); return }
+    if (!effectiveCategory)        { setError('Selecteer of maak een categorie.'); return }
     setSaving(true); setError('')
     try {
       const r = await fetch('/api/equipment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, description }),
+        body: JSON.stringify({ name, category: effectiveCategory, description }),
       })
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || data || 'Onbekende fout')
@@ -264,16 +267,45 @@ function AddEquipmentModal({
 
         <div>
           <label className="block text-xs text-zinc-500 uppercase tracking-wider mb-1.5">Categorie</label>
-          <select
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 transition-colors"
-          >
-            <option value="">Kies een categorie…</option>
-            {allCategories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+          {!customCat ? (
+            <div className="flex gap-2">
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 transition-colors"
+              >
+                <option value="">Kies een categorie…</option>
+                {allCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setCustomCat(true)}
+                className="px-3 py-2 text-xs text-zinc-400 border border-zinc-700 rounded-lg hover:text-zinc-200 hover:border-zinc-500 transition-colors whitespace-nowrap"
+              >
+                + Nieuwe
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                placeholder="Naam van nieuwe categorie…"
+                className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => { setCustomCat(false); setNewCategory('') }}
+                className="px-3 py-2 text-xs text-zinc-400 border border-zinc-700 rounded-lg hover:text-zinc-200 hover:border-zinc-500 transition-colors"
+              >
+                Annuleer
+              </button>
+            </div>
+          )}
         </div>
 
         <div>
@@ -1139,9 +1171,9 @@ export default function EquipmentPlanner() {
 
                         return (
                           <td key={item.id}
-                            className={`border-b border-r border-zinc-800/40 ${!isPast ? 'cursor-pointer group/cell' : ''}`}
+                            className={`border-b border-r border-zinc-800/40 ${!isPast && canReserveren ? 'cursor-pointer group/cell' : ''}`}
                             style={{ height: ROW_H, padding: '3px' }}
-                            onClick={() => !isPast && setCreateModal({ equipment: item, date: iso })}>
+                            onClick={() => !isPast && canReserveren && setCreateModal({ equipment: item, date: iso })}>
                             <div className={`h-full rounded flex items-center justify-center transition-all ${
                               isPast ? 'opacity-20' : 'group-hover/cell:brightness-125'
                             }`}

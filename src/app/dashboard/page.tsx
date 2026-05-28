@@ -175,7 +175,7 @@ export default async function DashboardPage() {
   const allRaw = (clients as ClientWithDocs[]) || []
   const all = filterClientsForUser(allRaw, user) as ClientWithDocs[]
 
-  const INTERN_ORDER = ['Sporthouse', 'Friends of Sports', 'Shirtlist']
+  const INTERN_ORDER = ['Sporthouse', 'Friends of Sports']
   const intern   = all
     .filter(c => c.category === 'intern')
     .sort((a, b) => {

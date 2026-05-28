@@ -204,6 +204,8 @@ function ContactModal({
   )
 }
 
+const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+
 export default function TeamDirectory({ internClients }: { internClients: Client[] }) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -211,6 +213,20 @@ export default function TeamDirectory({ internClients }: { internClients: Client
   const [editing, setEditing] = useState<Contact | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [canToevoegen, setCanToevoegen] = useState(false)
+  const [canVerwijderen, setCanVerwijderen] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+      const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
+      const noRestriction = isAdmin || !user.user_metadata?.permissions
+      setCanToevoegen(noRestriction || sections.includes('team_toevoegen'))
+      setCanVerwijderen(noRestriction || sections.includes('team_verwijderen'))
+    })
+  }, [])
 
   async function load() {
     const res = await fetch('/api/contacts')
@@ -263,14 +279,16 @@ export default function TeamDirectory({ internClients }: { internClients: Client
           onChange={e => setSearch(e.target.value)}
           className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-sh-grey placeholder:text-zinc-600 focus:outline-none focus:border-zinc-700 transition-colors"
         />
-        <button
-          onClick={() => { setEditing(null); setShowModal(true) }}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg flex-shrink-0 transition-colors"
-          style={{ backgroundColor: '#3A913F' }}
-        >
-          <Plus size={14} />
-          Toevoegen
-        </button>
+        {canToevoegen && (
+          <button
+            onClick={() => { setEditing(null); setShowModal(true) }}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg flex-shrink-0 transition-colors"
+            style={{ backgroundColor: '#3A913F' }}
+          >
+            <Plus size={14} />
+            Toevoegen
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -340,24 +358,30 @@ export default function TeamDirectory({ internClients }: { internClients: Client
                       </div>
 
                       {/* Actions */}
-                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => { setEditing(contact); setShowModal(true) }}
-                          className="p-1.5 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(contact.id)}
-                          disabled={deletingId === contact.id}
-                          className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
-                        >
-                          {deletingId === contact.id
-                            ? <Loader2 size={12} className="animate-spin" />
-                            : <Trash2 size={12} />
-                          }
-                        </button>
-                      </div>
+                      {(canToevoegen || canVerwijderen) && (
+                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {canToevoegen && (
+                            <button
+                              onClick={() => { setEditing(contact); setShowModal(true) }}
+                              className="p-1.5 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
+                            >
+                              <Pencil size={12} />
+                            </button>
+                          )}
+                          {canVerwijderen && (
+                            <button
+                              onClick={() => handleDelete(contact.id)}
+                              disabled={deletingId === contact.id}
+                              className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-zinc-800 rounded-md transition-colors"
+                            >
+                              {deletingId === contact.id
+                                ? <Loader2 size={12} className="animate-spin" />
+                                : <Trash2 size={12} />
+                              }
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

@@ -25,7 +25,6 @@ const LOGO_MAP: Record<string, string> = {
   'Jan Vertonghen Foundation':'/logos/jan-vertonghen-foundation.jpg',
   'Verstappen.com':           '/logos/verstappen-com.jpg',
   'Sporthouse':               '/logos/sporthouse.jpg',
-  'Shirtlist':                '/logos/shirtlist.jpg',
   'Friends of Sports':        '/logos/friends-of-sports.jpeg',
   'Kevin De Bruyne':          '/logos/kevin-de-bruyne.webp',
   'Kos Karetsas':             '/logos/karetsas.webp',

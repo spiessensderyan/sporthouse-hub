@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Send, Hash, Plus, Loader2, Trash2, X, ChevronDown, ChevronRight, MoreHorizontal, Pencil, FolderPlus, Paperclip, FileText, Download, GripVertical } from 'lucide-react'
+import { Send, Hash, Plus, Loader2, Trash2, X, ChevronDown, ChevronRight, MoreHorizontal, Pencil, FolderPlus, Paperclip, FileText, Download, GripVertical, Smile } from 'lucide-react'
 import {
   DndContext, DragEndEvent,
   PointerSensor, useSensor, useSensors, closestCenter,
@@ -33,6 +33,13 @@ interface Message {
   attachment_url: string | null
   attachment_name: string | null
   attachment_type: string | null
+}
+
+interface Reaction {
+  id: string
+  message_id: string
+  user_email: string
+  emoji: string
 }
 
 interface PendingAttachment {
@@ -366,6 +373,8 @@ export default function ChatPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null)
+  const [reactions, setReactions] = useState<Record<string, Reaction[]>>({})
+  const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -425,10 +434,48 @@ export default function ChatPage() {
   const loadMessages = useCallback(async (channelId: string) => {
     setLoadingMessages(true)
     const r = await fetch(`/api/chat/messages?channelId=${channelId}`)
-    const data = await r.json()
+    const data: Message[] = await r.json()
     setMessages(data)
     setLoadingMessages(false)
+    // Load reactions for these messages
+    if (data.length > 0) {
+      const ids = data.map(m => m.id).filter(id => !id.startsWith('temp-'))
+      const { data: rxData } = await supabase.from('chat_reactions').select('*').in('message_id', ids)
+      if (rxData) {
+        const map: Record<string, Reaction[]> = {}
+        for (const rx of rxData) {
+          if (!map[rx.message_id]) map[rx.message_id] = []
+          map[rx.message_id].push(rx)
+        }
+        setReactions(map)
+      }
+    }
   }, [])
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    if (!currentUserEmail) return
+    const existing = (reactions[messageId] ?? []).find(
+      r => r.emoji === emoji && r.user_email === currentUserEmail
+    )
+    if (existing) {
+      await supabase.from('chat_reactions').delete().eq('id', existing.id)
+      setReactions(prev => ({
+        ...prev,
+        [messageId]: (prev[messageId] ?? []).filter(r => r.id !== existing.id),
+      }))
+    } else {
+      const { data } = await supabase.from('chat_reactions').insert({
+        message_id: messageId, user_email: currentUserEmail, emoji,
+      }).select().single()
+      if (data) {
+        setReactions(prev => ({
+          ...prev,
+          [messageId]: [...(prev[messageId] ?? []), data as Reaction],
+        }))
+      }
+    }
+    setEmojiPickerMsgId(null)
+  }
 
   useEffect(() => {
     if (!activeChannel) return
@@ -468,6 +515,28 @@ export default function ChatPage() {
         { event: 'DELETE', schema: 'public', table: 'chat_messages' },
         (payload) => {
           setMessages(prev => prev.filter(m => m.id !== (payload.old as { id: string }).id))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_reactions' },
+        (payload) => {
+          const rx = payload.new as Reaction
+          setReactions(prev => ({
+            ...prev,
+            [rx.message_id]: [...(prev[rx.message_id] ?? []).filter(r => r.id !== rx.id), rx],
+          }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'chat_reactions' },
+        (payload) => {
+          const old = payload.old as { id: string; message_id: string }
+          setReactions(prev => ({
+            ...prev,
+            [old.message_id]: (prev[old.message_id] ?? []).filter(r => r.id !== old.id),
+          }))
         }
       )
       .subscribe()
@@ -934,20 +1003,79 @@ export default function ChatPage() {
                           type={msg.attachment_type}
                         />
                       )}
+                      {(reactions[msg.id]?.length ?? 0) > 0 && (() => {
+                        const grouped = (reactions[msg.id] ?? []).reduce<Record<string, Reaction[]>>((acc, rx) => {
+                          if (!acc[rx.emoji]) acc[rx.emoji] = []
+                          acc[rx.emoji].push(rx)
+                          return acc
+                        }, {})
+                        return (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {Object.entries(grouped).map(([emoji, rxs]) => {
+                              const hasOwn = rxs.some(r => r.user_email === currentUserEmail)
+                              return (
+                                <button
+                                  key={emoji}
+                                  onClick={() => toggleReaction(msg.id, emoji)}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all"
+                                  style={{
+                                    background: hasOwn ? 'rgba(58,145,63,0.2)' : 'rgba(255,255,255,0.06)',
+                                    border: `1px solid ${hasOwn ? 'rgba(58,145,63,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                                    color: hasOwn ? '#86efac' : '#a1a1aa',
+                                  }}
+                                >
+                                  <span>{emoji}</span>
+                                  <span>{rxs.length}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
                     </div>
 
-                    {isOwn && hoveredId === msg.id && (
-                      <button
-                        onClick={() => handleDelete(msg.id)}
-                        disabled={deletingId === msg.id}
-                        className="flex-shrink-0 p-1.5 rounded-md text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-all"
-                        title="Verwijder bericht"
-                      >
-                        {deletingId === msg.id
-                          ? <Loader2 size={12} className="animate-spin" />
-                          : <Trash2 size={12} />
-                        }
-                      </button>
+                    {hoveredId === msg.id && (
+                      <div className="flex-shrink-0 flex items-center gap-0.5">
+                        <div className="relative">
+                          <button
+                            onClick={() => setEmojiPickerMsgId(prev => prev === msg.id ? null : msg.id)}
+                            className="p-1.5 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-all"
+                            title="Reageren"
+                          >
+                            <Smile size={12} />
+                          </button>
+                          {emojiPickerMsgId === msg.id && (
+                            <div
+                              className="absolute right-0 bottom-full mb-1 flex gap-0.5 p-1 rounded-xl z-20"
+                              style={{ background: '#1f1f1f', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {['👍', '❤️', '😂', '🔥', '😮', '😢'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => toggleReaction(msg.id, emoji)}
+                                  className="text-base hover:scale-125 transition-transform w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {isOwn && (
+                          <button
+                            onClick={() => handleDelete(msg.id)}
+                            disabled={deletingId === msg.id}
+                            className="p-1.5 rounded-md text-zinc-600 hover:text-red-400 hover:bg-zinc-800 transition-all"
+                            title="Verwijder bericht"
+                          >
+                            {deletingId === msg.id
+                              ? <Loader2 size={12} className="animate-spin" />
+                              : <Trash2 size={12} />
+                            }
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

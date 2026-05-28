@@ -94,6 +94,13 @@ const SECTION_GROUPS = [
     ],
   },
   {
+    title: 'Team',
+    sections: [
+      { key: 'team_toevoegen',  label: 'Teamleden toevoegen' },
+      { key: 'team_verwijderen', label: 'Teamleden verwijderen' },
+    ],
+  },
+  {
     title: 'Freelancers',
     sections: [
       { key: 'freelancers', label: 'Freelancer tab bekijken & beheren' },

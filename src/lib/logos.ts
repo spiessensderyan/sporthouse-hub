@@ -18,7 +18,6 @@ const LOGO_MAP: Record<string, string> = {
   'Verstappen.com':            '/logos/verstappen-com.jpg',
   'Sporthouse':                '/logos/sporthouse.jpg',
   'Friends of Sports':         '/logos/friends-of-sports.jpeg',
-  'Shirtlist':                 '/logos/shirtlist.jpg',
   'Kevin De Bruyne':           '/logos/kevin-de-bruyne.webp',
   'Kos Karetsas':              '/logos/karetsas.webp',
   'Max Verstappen':            '/logos/verstappen.jpg',

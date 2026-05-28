@@ -162,7 +162,7 @@ export default function Sidebar({ clients }: SidebarProps) {
   }
 
   const allowed = visibleClients()
-  const INTERN_ORDER = ['Sporthouse', 'Friends of Sports', 'Shirtlist']
+  const INTERN_ORDER = ['Sporthouse', 'Friends of Sports']
   const intern = allowed
     .filter(c => c.category === 'intern')
     .sort((a, b) => {
