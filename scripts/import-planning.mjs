@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'fs'
 
-const SUPABASE_URL = 'https://cyhburjidtoudltqabfo.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5aGJ1cmppZHRvdWRsdHFhYmZvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjIxNzY2MiwiZXhwIjoyMDkxNzkzNjYyfQ.9zC3h-zIANJ9nxkfnOLXPyDWCAVd4Ir-UKQfqnlbbw8'
+// Credentials worden gelezen vanuit .env.local
+const envContent = readFileSync(new URL('../.env.local', import.meta.url).pathname, 'utf8')
+const env = Object.fromEntries(envContent.split('\n').filter(l => l.includes('=')).map(l => {
+  const idx = l.indexOf('='); return [l.slice(0, idx).trim(), l.slice(idx + 1).trim().replace(/^"|"$/g, '')]
+}))
+
+const SUPABASE_URL = env['NEXT_PUBLIC_SUPABASE_URL']
+const SUPABASE_KEY = env['SUPABASE_SERVICE_ROLE_KEY']
+if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('NEXT_PUBLIC_SUPABASE_URL of SUPABASE_SERVICE_ROLE_KEY ontbreekt in .env.local')
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
