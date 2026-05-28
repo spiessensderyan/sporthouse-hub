@@ -1,96 +1,45 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
-
 function LoginForm() {
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
-  const [processing, setProcessing] = useState(false)
+  const [loading, setLoading] = useState(false)
   const searchParams = useSearchParams()
-  const router       = useRouter()
 
-  // Supabase redirects back here with ?code= after Google login
-  useEffect(() => {
-    const code = searchParams.get('code')
-    if (!code) return
-
-    setProcessing(true)
-    const supabase = createClient()
-
-    supabase.auth.exchangeCodeForSession(code).then(async ({ error: exchError }) => {
-      if (exchError) {
-        setError('Er liep iets mis bij het inloggen. Probeer opnieuw.')
-        setProcessing(false)
-        return
-      }
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setError('Geen gebruiker gevonden.')
-        setProcessing(false)
-        return
-      }
-
-      const isAllowed =
-        ADMIN_EMAILS.includes(user.email ?? '') ||
-        user.user_metadata?.allowed === true
-
-      if (isAllowed) {
-        router.push('/dashboard')
-        router.refresh()
-        return
-      }
-
-      // Check if this is a freelancer
-      const freelancerRes = await fetch('/api/auth/check-freelancer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email }),
-      })
-      if (freelancerRes.ok) {
-        router.push('/portal')
-        router.refresh()
-        return
-      }
-
-      // Not allowed at all
-      await fetch('/api/auth/cleanup', { method: 'POST' })
-      setError('Dit e-mailadres heeft geen toegang tot het platform. Neem contact op met de beheerder.')
-      setProcessing(false)
-    })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const errorParam = searchParams.get('error')
+  const errorMessage =
+    errorParam === 'unauthorized' ? 'Dit e-mailadres heeft geen toegang tot het platform. Neem contact op met de beheerder.' :
+    errorParam === 'auth'         ? 'Er liep iets mis bij het inloggen. Probeer opnieuw.' :
+    null
 
   async function handleGoogleLogin() {
     setLoading(true)
-    setError(null)
     const supabase = createClient()
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
   }
 
   return (
     <div className="space-y-4">
-      {error && (
+      {errorMessage && (
         <div className="px-3.5 py-2.5 bg-red-950/50 border border-red-900/50 rounded-lg">
-          <p className="text-sm text-red-400">{error}</p>
+          <p className="text-sm text-red-400">{errorMessage}</p>
         </div>
       )}
 
       <button
         onClick={handleGoogleLogin}
-        disabled={loading || processing}
+        disabled={loading}
         className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white text-zinc-950 text-sm font-semibold rounded-lg hover:bg-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading || processing ? (
+        {loading ? (
           <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
@@ -103,7 +52,7 @@ function LoginForm() {
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
           </svg>
         )}
-        {loading || processing ? 'Bezig met inloggen…' : 'Inloggen met Google'}
+        {loading ? 'Bezig met inloggen…' : 'Inloggen met Google'}
       </button>
     </div>
   )
