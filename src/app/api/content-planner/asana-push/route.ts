@@ -64,7 +64,7 @@ export async function POST(req: Request) {
 
   const workspaceGid = process.env.ASANA_WORKSPACE_GID
   const projectGid = cfg.asana_project_gid
-  const clientPrefix = (client?.name ?? 'CONTENT').toUpperCase()
+  const clientPrefix = (client?.name ?? 'CONTENT').split(' ')[0].toUpperCase()
 
   // Resolve all emails to Asana GIDs in one call
   const usersRes = await fetch(
