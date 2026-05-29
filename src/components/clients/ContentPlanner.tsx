@@ -86,7 +86,12 @@ export default function ContentPlanner({
   const [activeTab, setActiveTab] = useState<'planning' | 'whatsapp' | 'config'>('planning')
   const [rows, setRows] = useState<Row[]>([])
   const [members, setMembers] = useState<Member[]>([])
-  const [config, setConfig] = useState<{ asana_project_gid: string } | null>(null)
+  const [config, setConfig] = useState<{ asana_project_gid: string; asana_extra_project_gids: { gid: string; label: string }[] } | null>(null)
+  const [extraProjects, setExtraProjects] = useState<{ gid: string; label: string }[]>([])
+  const [newProjectGid, setNewProjectGid] = useState('')
+  const [newProjectLabel, setNewProjectLabel] = useState('')
+  const [savingExtra, setSavingExtra] = useState(false)
+  const [removingExtraIndex, setRemovingExtraIndex] = useState<number | null>(null)
   const [loadingData, setLoadingData] = useState(true)
 
   const [pushing, setPushing] = useState(false)
@@ -140,6 +145,7 @@ export default function ContentPlanner({
           const cfg = await cRes.json()
           setConfig(cfg)
           setAsanaGidInput(cfg?.asana_project_gid ?? '')
+          setExtraProjects(cfg?.asana_extra_project_gids ?? [])
         }
       } finally {
         setLoadingData(false)
@@ -320,13 +326,51 @@ export default function ContentPlanner({
       await fetch('/api/content-planner/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, asana_project_gid: asanaGidInput.trim() }),
+        body: JSON.stringify({ clientId, asana_project_gid: asanaGidInput.trim(), asana_extra_project_gids: extraProjects }),
       })
-      setConfig({ asana_project_gid: asanaGidInput.trim() })
+      setConfig({ asana_project_gid: asanaGidInput.trim(), asana_extra_project_gids: extraProjects })
       setSavedGid(true)
       setTimeout(() => setSavedGid(false), 2200)
     } finally {
       setSavingGid(false)
+    }
+  }
+
+  async function saveExtraProjects(updated: { gid: string; label: string }[]) {
+    await fetch('/api/content-planner/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId,
+        asana_project_gid: config?.asana_project_gid ?? asanaGidInput.trim(),
+        asana_extra_project_gids: updated,
+      }),
+    })
+  }
+
+  async function handleAddExtraProject() {
+    if (!newProjectGid.trim()) return
+    const entry = { gid: newProjectGid.trim(), label: newProjectLabel.trim() }
+    const updated = [...extraProjects, entry]
+    setSavingExtra(true)
+    try {
+      await saveExtraProjects(updated)
+      setExtraProjects(updated)
+      setNewProjectGid('')
+      setNewProjectLabel('')
+    } finally {
+      setSavingExtra(false)
+    }
+  }
+
+  async function handleRemoveExtraProject(index: number) {
+    setRemovingExtraIndex(index)
+    try {
+      const updated = extraProjects.filter((_, i) => i !== index)
+      await saveExtraProjects(updated)
+      setExtraProjects(updated)
+    } finally {
+      setRemovingExtraIndex(null)
     }
   }
 
@@ -707,6 +751,66 @@ export default function ContentPlanner({
                 </button>
               </div>
             </div>
+
+            {/* Extra Asana projecten */}
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-300 mb-1">Extra Asana-projecten</h3>
+              <p className="text-xs text-zinc-500 mb-3">
+                Taken worden toegevoegd aan het hoofdproject én aan elk extra project hieronder.
+              </p>
+
+              {extraProjects.length > 0 && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-3">
+                  <div className="divide-y divide-zinc-800">
+                    {extraProjects.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          {p.label && <p className="text-sm text-zinc-200">{p.label}</p>}
+                          <p className={`font-mono text-xs ${p.label ? 'text-zinc-500' : 'text-zinc-300'}`}>{p.gid}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveExtraProject(i)}
+                          disabled={removingExtraIndex === i}
+                          className="text-zinc-600 hover:text-red-400 transition-colors"
+                        >
+                          {removingExtraIndex === i ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <X size={13} />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  value={newProjectLabel}
+                  onChange={e => setNewProjectLabel(e.target.value)}
+                  placeholder="Naam (optioneel)"
+                  className="w-36 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+                />
+                <input
+                  type="text"
+                  value={newProjectGid}
+                  onChange={e => setNewProjectGid(e.target.value)}
+                  placeholder="Project GID"
+                  className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+                />
+                <button
+                  onClick={handleAddExtraProject}
+                  disabled={!newProjectGid.trim() || savingExtra}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {savingExtra ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Toevoegen
+                </button>
+              </div>
+            </div>
+
           </div>
         )}
       </div>
