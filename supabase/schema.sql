@@ -485,3 +485,42 @@ INSERT INTO clients (name, description, color, category) VALUES
   ('BALLIEMAN',        'Friends Of Sports podcast',  '#0369a1', 'podcast'),
   ('Kartel',           'Friends Of Sports podcast',  '#1d4ed8', 'podcast')
 ON CONFLICT DO NOTHING;
+
+-- ============================================================
+-- CONTENT PLANNER TABLES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_planner_config (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  asana_project_gid TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT content_planner_config_client_unique UNIQUE(client_id)
+);
+
+CREATE TABLE IF NOT EXISTS content_planner_members (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  contact_name TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('pm', 'designer')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT content_planner_members_unique UNIQUE(client_id, contact_email)
+);
+
+ALTER TABLE content_planner_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE content_planner_members ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read content_planner_config" ON content_planner_config;
+DROP POLICY IF EXISTS "Service role full access content_planner_config" ON content_planner_config;
+CREATE POLICY "Authenticated users can read content_planner_config"
+  ON content_planner_config FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Service role full access content_planner_config"
+  ON content_planner_config FOR ALL TO service_role USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can read content_planner_members" ON content_planner_members;
+DROP POLICY IF EXISTS "Service role full access content_planner_members" ON content_planner_members;
+CREATE POLICY "Authenticated users can read content_planner_members"
+  ON content_planner_members FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Service role full access content_planner_members"
+  ON content_planner_members FOR ALL TO service_role USING (true);

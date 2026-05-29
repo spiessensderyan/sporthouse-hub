@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { FolderOpen, Mic, PenLine, BrainCircuit, ArrowRight, Gift, Scissors, CalendarDays, CalendarRange, GraduationCap, BarChart2, Landmark, ClipboardList } from 'lucide-react'
+import { FolderOpen, Mic, PenLine, BrainCircuit, ArrowRight, Gift, Scissors, CalendarDays, CalendarRange, GraduationCap, BarChart2, Landmark, ClipboardList, LayoutList } from 'lucide-react'
 
 const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
@@ -144,6 +144,14 @@ export default async function ClientToolsPage({ params }: Props) {
       icon: Gift,
       label: 'Giveaway Tool',
       description: 'Upload de scraped reacties als CSV, filter op correct antwoord en kies automatisch een winnaar.',
+      color: '#057a55',
+      available: true,
+    }, {
+      id: 'content-planner',
+      href: `/clients/${id}/content-planner`,
+      icon: LayoutList,
+      label: 'Content Planner',
+      description: 'Plan posts tijdens de meeting en push ze in één klik naar Asana — inclusief WhatsApp-export.',
       color: '#057a55',
       available: true,
     }] : []),
