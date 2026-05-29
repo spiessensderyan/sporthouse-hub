@@ -35,14 +35,50 @@ export async function POST(req: Request) {
   if (!user) return new Response('Forbidden', { status: 403 })
 
   const { clientId, name, country, sofascore_tournament_id, sofascore_season_id } = await req.json()
-  if (!clientId || !name || !sofascore_tournament_id || !sofascore_season_id) {
-    return new Response('Verplichte velden ontbreken', { status: 400 })
+  if (!clientId || !name) return new Response('clientId en name zijn verplicht', { status: 400 })
+
+  const admin = createAdminClient()
+
+  // Skip if competition with this name already exists for this client
+  const { data: existing } = await admin
+    .from('club_lookup_competitions')
+    .select('id')
+    .eq('client_id', clientId)
+    .ilike('name', name.trim())
+    .maybeSingle()
+
+  if (existing) return Response.json(existing)
+
+  const { data, error } = await admin
+    .from('club_lookup_competitions')
+    .insert({
+      client_id: clientId,
+      name: name.trim(),
+      country: (country ?? '').trim(),
+      sofascore_tournament_id: (sofascore_tournament_id ?? '').trim(),
+      sofascore_season_id: (sofascore_season_id ?? '').trim(),
+    })
+    .select()
+    .single()
+
+  if (error) return new Response(error.message, { status: 500 })
+  return Response.json(data)
+}
+
+export async function PUT(req: Request) {
+  const user = await requireAdmin()
+  if (!user) return new Response('Forbidden', { status: 403 })
+
+  const { id, sofascore_tournament_id, sofascore_season_id } = await req.json()
+  if (!id || !sofascore_tournament_id || !sofascore_season_id) {
+    return new Response('id, sofascore_tournament_id en sofascore_season_id zijn verplicht', { status: 400 })
   }
 
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('club_lookup_competitions')
-    .insert({ client_id: clientId, name: name.trim(), country: (country ?? '').trim(), sofascore_tournament_id: sofascore_tournament_id.trim(), sofascore_season_id: sofascore_season_id.trim() })
+    .update({ sofascore_tournament_id: sofascore_tournament_id.trim(), sofascore_season_id: String(sofascore_season_id).trim() })
+    .eq('id', id)
     .select()
     .single()
 
