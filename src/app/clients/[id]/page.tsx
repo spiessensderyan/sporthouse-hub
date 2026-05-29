@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { FolderOpen, Mic, PenLine, BrainCircuit, ArrowRight, Gift, Scissors, CalendarDays, CalendarRange, GraduationCap, BarChart2, Landmark, ClipboardList, LayoutList } from 'lucide-react'
+import { FolderOpen, Mic, PenLine, BrainCircuit, ArrowRight, Gift, Scissors, CalendarDays, CalendarRange, GraduationCap, BarChart2, Landmark, ClipboardList, LayoutList, Search } from 'lucide-react'
 
 const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
@@ -152,6 +152,14 @@ export default async function ClientToolsPage({ params }: Props) {
       icon: LayoutList,
       label: 'Content Planner',
       description: 'Plan posts tijdens de meeting en push ze in één klik naar Asana — inclusief WhatsApp-export.',
+      color: '#057a55',
+      available: true,
+    }, {
+      id: 'club-lookup',
+      href: `/clients/${id}/club-lookup`,
+      icon: Search,
+      label: 'Club Lookup',
+      description: 'Zoek de juiste interne benaming voor elke club — eén klik om te kopiëren, met seizoensupdate via Sofascore.',
       color: '#057a55',
       available: true,
     }] : []),

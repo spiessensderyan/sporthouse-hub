@@ -524,3 +524,48 @@ CREATE POLICY "Authenticated users can read content_planner_members"
   ON content_planner_members FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Service role full access content_planner_members"
   ON content_planner_members FOR ALL TO service_role USING (true);
+
+-- ============================================================
+-- CLUB LOOKUP TABLES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS club_lookup_clubs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  short_name TEXT NOT NULL,
+  competition TEXT NOT NULL DEFAULT '',
+  level TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL DEFAULT '',
+  sofascore_id TEXT NOT NULL DEFAULT '',
+  needs_name BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS club_lookup_competitions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT '',
+  sofascore_tournament_id TEXT NOT NULL,
+  sofascore_season_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE club_lookup_clubs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE club_lookup_competitions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read club_lookup_clubs" ON club_lookup_clubs;
+DROP POLICY IF EXISTS "Service role full access club_lookup_clubs" ON club_lookup_clubs;
+CREATE POLICY "Authenticated users can read club_lookup_clubs"
+  ON club_lookup_clubs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Service role full access club_lookup_clubs"
+  ON club_lookup_clubs FOR ALL TO service_role USING (true);
+
+DROP POLICY IF EXISTS "Authenticated users can read club_lookup_competitions" ON club_lookup_competitions;
+DROP POLICY IF EXISTS "Service role full access club_lookup_competitions" ON club_lookup_competitions;
+CREATE POLICY "Authenticated users can read club_lookup_competitions"
+  ON club_lookup_competitions FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Service role full access club_lookup_competitions"
+  ON club_lookup_competitions FOR ALL TO service_role USING (true);
