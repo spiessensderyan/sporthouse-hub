@@ -402,12 +402,20 @@ export default function ContentPlanner({
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 bg-white text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-100 transition-colors"
-                >
-                  Planning resetten
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleReset}
+                    className="px-4 py-2 bg-white text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-100 transition-colors"
+                  >
+                    Planning resetten
+                  </button>
+                  <button
+                    onClick={() => { setPushResults(null); setPushError(null) }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                  >
+                    Behouden
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -441,7 +449,7 @@ export default function ContentPlanner({
                         <th className="px-3 py-2.5 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide" style={{ minWidth: 130 }}>Datum</th>
                         <th className="px-3 py-2.5 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide">Titel / insteek</th>
                         <th className="px-3 py-2.5 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide" style={{ minWidth: 120 }}>Designer</th>
-                        <th className="w-8" />
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-zinc-500 uppercase tracking-wide">Notities</th>
                         <th className="w-8" />
                       </tr>
                     </thead>
@@ -455,7 +463,7 @@ export default function ContentPlanner({
                                 type="date"
                                 value={row.date}
                                 onChange={e => updateRow(row.id, 'date', e.target.value)}
-                                className="w-full bg-transparent text-zinc-200 text-sm px-2 py-2 outline-none focus:bg-zinc-800/50 rounded transition-colors"
+                                className="w-full bg-transparent text-zinc-200 text-sm px-2 py-2 outline-none focus:bg-zinc-800/50 rounded transition-colors [color-scheme:dark]"
                               />
                             </td>
                             <td className="px-1">
@@ -464,7 +472,7 @@ export default function ContentPlanner({
                                 value={row.title}
                                 onChange={e => updateRow(row.id, 'title', e.target.value)}
                                 placeholder="Schrijf de titel / insteek…"
-                                className="w-full bg-transparent text-zinc-200 text-sm px-2 py-2 outline-none focus:bg-zinc-800/50 rounded transition-colors placeholder:text-zinc-700"
+                                className="w-full bg-transparent text-zinc-200 text-sm px-2 py-2 outline-none focus:bg-zinc-800/50 rounded transition-colors placeholder:text-zinc-500"
                               />
                             </td>
                             <td className="px-1">
