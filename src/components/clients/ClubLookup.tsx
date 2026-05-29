@@ -341,8 +341,12 @@ export default function ClubLookup({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, csv: text }),
       })
-      const data = await res.json()
-      if (!res.ok) { alert(data ?? 'CSV import mislukt'); return }
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const msg = typeof data === 'string' ? data : (data?.error ?? data?.message ?? 'CSV import mislukt')
+        alert(msg)
+        return
+      }
       setCsvResult(data)
       const r = await fetch(`/api/club-lookup/clubs?clientId=${clientId}`)
       if (r.ok) setClubs(await r.json())
