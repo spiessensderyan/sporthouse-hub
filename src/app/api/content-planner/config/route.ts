@@ -22,25 +22,30 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('content_planner_config')
-    .select('asana_project_gid')
+    .select('asana_project_gid, asana_extra_project_gids')
     .eq('client_id', clientId)
     .maybeSingle()
 
-  return Response.json(data ?? { asana_project_gid: '' })
+  return Response.json(data ?? { asana_project_gid: '', asana_extra_project_gids: [] })
 }
 
 export async function PUT(req: Request) {
   const user = await requireAdmin()
   if (!user) return new Response('Forbidden', { status: 403 })
 
-  const { clientId, asana_project_gid } = await req.json()
+  const { clientId, asana_project_gid, asana_extra_project_gids } = await req.json()
   if (!clientId) return new Response('clientId required', { status: 400 })
 
   const admin = createAdminClient()
   const { error } = await admin
     .from('content_planner_config')
     .upsert(
-      { client_id: clientId, asana_project_gid: asana_project_gid ?? '', updated_at: new Date().toISOString() },
+      {
+        client_id: clientId,
+        asana_project_gid: asana_project_gid ?? '',
+        asana_extra_project_gids: asana_extra_project_gids ?? [],
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'client_id' }
     )
 

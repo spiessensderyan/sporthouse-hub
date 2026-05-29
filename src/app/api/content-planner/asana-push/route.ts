@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
 
   const [{ data: cfg }, { data: members }, { data: client }] = await Promise.all([
-    admin.from('content_planner_config').select('asana_project_gid').eq('client_id', clientId).maybeSingle(),
+    admin.from('content_planner_config').select('asana_project_gid, asana_extra_project_gids').eq('client_id', clientId).maybeSingle(),
     admin.from('content_planner_members').select('contact_name, contact_email, role').eq('client_id', clientId),
     admin.from('clients').select('name').eq('id', clientId).single(),
   ])
@@ -63,7 +63,8 @@ export async function POST(req: Request) {
   }
 
   const workspaceGid = process.env.ASANA_WORKSPACE_GID
-  const projectGid = cfg.asana_project_gid
+  const extraGids: string[] = (cfg.asana_extra_project_gids ?? []).map((p: { gid: string }) => p.gid).filter(Boolean)
+  const allProjectGids = [cfg.asana_project_gid, ...extraGids]
   const clientPrefix = (client?.name ?? 'CONTENT').split(' ')[0].toUpperCase()
 
   // Resolve all emails to Asana GIDs in one call
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
             assignee: pmGid,
             due_on: row.date,
             notes: description,
-            projects: [projectGid],
+            projects: allProjectGids,
           },
         }),
       })
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
             assignee: designerGid,
             due_on: row.date,
             notes: description,
-            projects: [projectGid],
+            projects: allProjectGids,
           },
         }),
       })
