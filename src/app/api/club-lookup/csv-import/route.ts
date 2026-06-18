@@ -93,5 +93,39 @@ export async function POST(req: Request) {
     }
   }
 
-  return Response.json({ inserted, updated, skipped })
+  // Auto-detect competitions and create them if they don't exist yet
+  const competitionNames = new Set<string>()
+  const competitionCountries = new Map<string, string>()
+  for (const line of rows) {
+    const cols = parseCSVLine(line)
+    const competition = idx.competition >= 0 ? (cols[idx.competition] ?? '').trim() : ''
+    const country = idx.country >= 0 ? (cols[idx.country] ?? '').trim() : ''
+    if (competition) {
+      competitionNames.add(competition)
+      if (country && !competitionCountries.has(competition)) competitionCountries.set(competition, country)
+    }
+  }
+
+  const { data: existingComps } = await admin
+    .from('club_lookup_competitions')
+    .select('name')
+    .eq('client_id', clientId)
+
+  const existingCompNames = new Set((existingComps ?? []).map((c: { name: string }) => c.name.toLowerCase()))
+  let competitionsAdded = 0
+
+  for (const name of competitionNames) {
+    if (!existingCompNames.has(name.toLowerCase())) {
+      await admin.from('club_lookup_competitions').insert({
+        client_id: clientId,
+        name,
+        country: competitionCountries.get(name) ?? '',
+        sofascore_tournament_id: '',
+        sofascore_season_id: '',
+      })
+      competitionsAdded++
+    }
+  }
+
+  return Response.json({ inserted, updated, skipped, competitionsAdded })
 }

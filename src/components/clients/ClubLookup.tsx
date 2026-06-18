@@ -116,16 +116,22 @@ export default function ClubLookup({
   const [addingSaving, setAddingSaving] = useState(false)
 
   // Beheer tab
-  const [newComp, setNewComp] = useState({ name: '', country: '', sofascore_tournament_id: '', sofascore_season_id: '' })
+  const [newComp, setNewComp] = useState({ name: '', country: '' })
   const [addingComp, setAddingComp] = useState(false)
   const [deletingCompId, setDeletingCompId] = useState<string | null>(null)
+  const [linkingCompId, setLinkingCompId] = useState<string | null>(null)
+  const [linkSearch, setLinkSearch] = useState('')
+  const [linkResults, setLinkResults] = useState<{ id: number; name: string; country: string; latestSeasonId: number }[]>([])
+  const [linkSearching, setLinkSearching] = useState(false)
+  const [linkSaving, setLinkSaving] = useState(false)
+  const linkSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [refreshing, setRefreshing] = useState(false)
   const [diff, setDiff] = useState<Diff | null>(null)
   const [confirmingDiff, setConfirmingDiff] = useState(false)
 
   const [csvImporting, setCsvImporting] = useState(false)
-  const [csvResult, setCsvResult] = useState<{ inserted: number; updated: number; skipped: number } | null>(null)
+  const [csvResult, setCsvResult] = useState<{ inserted: number; updated: number; skipped: number; competitionsAdded: number } | null>(null)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -256,21 +262,62 @@ export default function ClubLookup({
 
   // ── Competitions ───────────────────────────────────────────────────────────
   async function addCompetition() {
-    if (!newComp.name || !newComp.sofascore_tournament_id || !newComp.sofascore_season_id) return
+    if (!newComp.name) return
     setAddingComp(true)
     try {
       const res = await fetch('/api/club-lookup/competitions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, ...newComp }),
+        body: JSON.stringify({ clientId, name: newComp.name, country: newComp.country }),
       })
       if (res.ok) {
         const c = await res.json()
-        setCompetitions(prev => [...prev, c])
-        setNewComp({ name: '', country: '', sofascore_tournament_id: '', sofascore_season_id: '' })
+        setCompetitions(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
+        setNewComp({ name: '', country: '' })
       }
     } finally {
       setAddingComp(false)
+    }
+  }
+
+  function startLinking(compId: string) {
+    setLinkingCompId(compId)
+    setLinkSearch('')
+    setLinkResults([])
+  }
+
+  function onLinkSearchChange(val: string) {
+    setLinkSearch(val)
+    if (linkSearchRef.current) clearTimeout(linkSearchRef.current)
+    if (val.length < 2) { setLinkResults([]); return }
+    setLinkSearching(true)
+    linkSearchRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/club-lookup/sofascore-search?q=${encodeURIComponent(val)}`)
+        if (res.ok) setLinkResults(await res.json())
+      } finally {
+        setLinkSearching(false)
+      }
+    }, 350)
+  }
+
+  async function confirmLink(comp: Competition, sofascoreId: number, seasonId: number) {
+    setLinkSaving(true)
+    try {
+      const res = await fetch('/api/club-lookup/competitions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: comp.id, sofascore_tournament_id: String(sofascoreId), sofascore_season_id: String(seasonId) }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setCompetitions(prev => prev.map(c => c.id === comp.id ? updated : c))
+        setLinkingCompId(null)
+        setLinkResults([])
+        setLinkSearch('')
+      }
+    } finally {
+      setLinkSaving(false)
     }
   }
 
@@ -348,8 +395,12 @@ export default function ClubLookup({
         return
       }
       setCsvResult(data)
-      const r = await fetch(`/api/club-lookup/clubs?clientId=${clientId}`)
-      if (r.ok) setClubs(await r.json())
+      const [clubsRes, compsRes] = await Promise.all([
+        fetch(`/api/club-lookup/clubs?clientId=${clientId}`),
+        fetch(`/api/club-lookup/competitions?clientId=${clientId}`),
+      ])
+      if (clubsRes.ok) setClubs(await clubsRes.json())
+      if (compsRes.ok) setCompetitions(await compsRes.json())
     } finally {
       setCsvImporting(false)
     }
@@ -664,35 +715,80 @@ export default function ClubLookup({
               {/* Competities */}
               <div>
                 <h3 className="text-sm font-semibold text-zinc-300 mb-1">Competities</h3>
-                <p className="text-xs text-zinc-500 mb-4">Voeg de competities toe die je wil volgen via Sofascore. De tournament ID en season ID vind je in de Sofascore URL.</p>
+                <p className="text-xs text-zinc-500 mb-4">
+                  Worden automatisch gedetecteerd bij CSV import. Koppel ze daarna aan Sofascore via de zoekknop.
+                </p>
+
+                {competitions.length === 0 && (
+                  <p className="text-xs text-zinc-600 mb-4">Nog geen competities. Importeer een CSV — competities worden automatisch gedetecteerd.</p>
+                )}
 
                 {competitions.length > 0 && (
                   <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden mb-4">
                     <div className="divide-y divide-zinc-800">
-                      {competitions.map(comp => (
-                        <div key={comp.id} className="flex items-center justify-between px-4 py-3">
-                          <div>
-                            <p className="text-sm text-zinc-200">{flag(comp.country)} {comp.name}</p>
-                            <p className="text-xs text-zinc-600 font-mono">T:{comp.sofascore_tournament_id} · S:{comp.sofascore_season_id}</p>
+                      {competitions.map(comp => {
+                        const isLinked = !!comp.sofascore_tournament_id
+                        const isLinking = linkingCompId === comp.id
+                        return (
+                          <div key={comp.id} className="px-4 py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isLinked ? 'bg-green-400' : 'bg-orange-400'}`} />
+                                <p className="text-sm text-zinc-200 truncate">{flag(comp.country)} {comp.name}</p>
+                                {isLinked && <span className="text-xs text-zinc-600 font-mono flex-shrink-0">#{comp.sofascore_tournament_id}</span>}
+                              </div>
+                              <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                                {!isLinked && !isLinking && (
+                                  <button onClick={() => startLinking(comp.id)} className="text-xs px-2 py-1 bg-orange-500/15 text-orange-400 border border-orange-500/20 rounded-md hover:bg-orange-500/25 transition-colors">
+                                    Koppelen
+                                  </button>
+                                )}
+                                {isLinking && (
+                                  <button onClick={() => setLinkingCompId(null)} className="text-xs text-zinc-500 hover:text-zinc-300">Annuleer</button>
+                                )}
+                                <button onClick={() => deleteCompetition(comp.id)} disabled={deletingCompId === comp.id} className="text-zinc-600 hover:text-red-400 transition-colors">
+                                  {deletingCompId === comp.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                                </button>
+                              </div>
+                            </div>
+                            {isLinking && (
+                              <div className="mt-3 relative">
+                                <input
+                                  autoFocus
+                                  value={linkSearch}
+                                  onChange={e => onLinkSearchChange(e.target.value)}
+                                  placeholder="Zoek competitie op Sofascore…"
+                                  className="w-full bg-zinc-800 border border-zinc-600 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-400 placeholder:text-zinc-600"
+                                />
+                                {linkSearching && <Loader2 size={13} className="animate-spin text-zinc-500 absolute right-3 top-1/2 -translate-y-1/2" />}
+                                {linkResults.length > 0 && (
+                                  <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden shadow-xl">
+                                    {linkResults.map(r => (
+                                      <button key={r.id} onClick={() => confirmLink(comp, r.id, r.latestSeasonId)} disabled={linkSaving} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-zinc-700 transition-colors text-left">
+                                        <div>
+                                          <p className="text-sm text-zinc-200">{r.name}</p>
+                                          <p className="text-xs text-zinc-500">{r.country}</p>
+                                        </div>
+                                        <span className="text-xs text-zinc-600 font-mono ml-2 flex-shrink-0">#{r.id}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <button onClick={() => deleteCompetition(comp.id)} disabled={deletingCompId === comp.id} className="text-zinc-600 hover:text-red-400 transition-colors ml-3">
-                            {deletingCompId === comp.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
-                          </button>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={newComp.name} onChange={e => setNewComp(f => ({ ...f, name: e.target.value }))} placeholder="Naam competitie *" className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
-                  <input value={newComp.country} onChange={e => setNewComp(f => ({ ...f, country: e.target.value }))} placeholder="Land" className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
-                  <input value={newComp.sofascore_tournament_id} onChange={e => setNewComp(f => ({ ...f, sofascore_tournament_id: e.target.value }))} placeholder="Tournament ID *" className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600 font-mono" />
-                  <input value={newComp.sofascore_season_id} onChange={e => setNewComp(f => ({ ...f, sofascore_season_id: e.target.value }))} placeholder="Season ID *" className="bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600 font-mono" />
+                <div className="flex items-center gap-2">
+                  <input value={newComp.name} onChange={e => setNewComp(f => ({ ...f, name: e.target.value }))} placeholder="Competitie manueel toevoegen" className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
+                  <button onClick={addCompetition} disabled={addingComp || !newComp.name} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    {addingComp ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Toevoegen
+                  </button>
                 </div>
-                <button onClick={addCompetition} disabled={addingComp || !newComp.name || !newComp.sofascore_tournament_id || !newComp.sofascore_season_id} className="mt-2 flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  {addingComp ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Toevoegen
-                </button>
               </div>
 
               {/* Seizoensupdate */}
@@ -789,7 +885,10 @@ export default function ClubLookup({
                 </label>
                 {csvResult && (
                   <p className="mt-3 text-xs text-zinc-400 font-mono">
-                    ✓ {csvResult.inserted} toegevoegd · {csvResult.updated} bijgewerkt · {csvResult.skipped} overgeslagen
+                    ✓ {csvResult.inserted} clubs toegevoegd · {csvResult.updated} bijgewerkt · {csvResult.skipped} overgeslagen
+                    {csvResult.competitionsAdded > 0 && (
+                      <><br />↳ {csvResult.competitionsAdded} {csvResult.competitionsAdded === 1 ? 'competitie' : 'competities'} gedetecteerd — koppel ze aan Sofascore hierboven</>
+                    )}
                   </p>
                 )}
               </div>
