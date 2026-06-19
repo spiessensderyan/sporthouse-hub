@@ -86,7 +86,8 @@ export default function ContentPlanner({
   const [activeTab, setActiveTab] = useState<'planning' | 'whatsapp' | 'config'>('planning')
   const [rows, setRows] = useState<Row[]>([])
   const [members, setMembers] = useState<Member[]>([])
-  const [config, setConfig] = useState<{ asana_project_gid: string; asana_extra_project_gids: { gid: string; label: string }[] } | null>(null)
+  const [config, setConfig] = useState<{ asana_project_gid: string; asana_extra_project_gids: { gid: string; label: string }[]; active_pm_email: string | null } | null>(null)
+  const [savingActivePm, setSavingActivePm] = useState(false)
   const [extraProjects, setExtraProjects] = useState<{ gid: string; label: string }[]>([])
   const [newProjectGid, setNewProjectGid] = useState('')
   const [newProjectLabel, setNewProjectLabel] = useState('')
@@ -333,6 +334,27 @@ export default function ContentPlanner({
     }
   }
 
+  // Config: actieve PM instellen
+  async function handleActivePm(email: string) {
+    setSavingActivePm(true)
+    try {
+      const newEmail = config?.active_pm_email === email ? null : email
+      await fetch('/api/content-planner/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          asana_project_gid: config?.asana_project_gid ?? asanaGidInput.trim(),
+          asana_extra_project_gids: extraProjects,
+          active_pm_email: newEmail,
+        }),
+      })
+      setConfig(prev => prev ? { ...prev, active_pm_email: newEmail } : prev)
+    } finally {
+      setSavingActivePm(false)
+    }
+  }
+
   // Config: Asana GID
   async function handleSaveGid() {
     setSavingGid(true)
@@ -340,9 +362,14 @@ export default function ContentPlanner({
       await fetch('/api/content-planner/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, asana_project_gid: asanaGidInput.trim(), asana_extra_project_gids: extraProjects }),
+        body: JSON.stringify({
+          clientId,
+          asana_project_gid: asanaGidInput.trim(),
+          asana_extra_project_gids: extraProjects,
+          active_pm_email: config?.active_pm_email ?? null,
+        }),
       })
-      setConfig({ asana_project_gid: asanaGidInput.trim(), asana_extra_project_gids: extraProjects })
+      setConfig(prev => prev ? { ...prev, asana_project_gid: asanaGidInput.trim(), asana_extra_project_gids: extraProjects } : prev)
       setSavedGid(true)
       setTimeout(() => setSavedGid(false), 2200)
     } finally {
@@ -358,6 +385,7 @@ export default function ContentPlanner({
         clientId,
         asana_project_gid: config?.asana_project_gid ?? asanaGidInput.trim(),
         asana_extra_project_gids: updated,
+        active_pm_email: config?.active_pm_email ?? null,
       }),
     })
   }
@@ -677,7 +705,26 @@ export default function ContentPlanner({
                             <p className="text-xs text-zinc-500">{m.contact_email}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          {m.role === 'pm' && (
+                            config?.active_pm_email === m.contact_email ? (
+                              <button
+                                onClick={() => handleActivePm(m.contact_email)}
+                                disabled={savingActivePm}
+                                className="text-xs px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/20 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/20 transition-colors"
+                              >
+                                {savingActivePm ? <Loader2 size={10} className="animate-spin inline" /> : 'Actief'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleActivePm(m.contact_email)}
+                                disabled={savingActivePm}
+                                className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500 border border-zinc-700 hover:bg-blue-500/15 hover:text-blue-400 hover:border-blue-500/20 transition-colors"
+                              >
+                                {savingActivePm ? <Loader2 size={10} className="animate-spin inline" /> : 'Activeer'}
+                              </button>
+                            )
+                          )}
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full ${
                               m.role === 'pm'

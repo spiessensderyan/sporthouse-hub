@@ -22,18 +22,18 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('content_planner_config')
-    .select('asana_project_gid, asana_extra_project_gids')
+    .select('asana_project_gid, asana_extra_project_gids, active_pm_email')
     .eq('client_id', clientId)
     .maybeSingle()
 
-  return Response.json(data ?? { asana_project_gid: '', asana_extra_project_gids: [] })
+  return Response.json(data ?? { asana_project_gid: '', asana_extra_project_gids: [], active_pm_email: null })
 }
 
 export async function PUT(req: Request) {
   const user = await requireAdmin()
   if (!user) return new Response('Forbidden', { status: 403 })
 
-  const { clientId, asana_project_gid, asana_extra_project_gids } = await req.json()
+  const { clientId, asana_project_gid, asana_extra_project_gids, active_pm_email } = await req.json()
   if (!clientId) return new Response('clientId required', { status: 400 })
 
   const admin = createAdminClient()
@@ -44,6 +44,7 @@ export async function PUT(req: Request) {
         client_id: clientId,
         asana_project_gid: asana_project_gid ?? '',
         asana_extra_project_gids: asana_extra_project_gids ?? [],
+        active_pm_email: active_pm_email ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'client_id' }
