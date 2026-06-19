@@ -569,3 +569,7 @@ CREATE POLICY "Authenticated users can read club_lookup_competitions"
   ON club_lookup_competitions FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Service role full access club_lookup_competitions"
   ON club_lookup_competitions FOR ALL TO service_role USING (true);
+
+-- Seizoensupdate: niveau per competitie binnen een land
+ALTER TABLE club_lookup_competitions
+ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT NULL;

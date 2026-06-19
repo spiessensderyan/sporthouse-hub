@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Upload, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, Upload, Search, ChevronRight, ChevronLeft, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Club {
   id: string
@@ -19,6 +19,17 @@ interface Competition {
   id: string
   name: string
   country: string
+  level: number | null
+}
+
+interface SeasonStep {
+  competition: Competition
+  country: string
+  clubs: Club[]
+  higherCompetition: Competition | null
+  lowerCompetition: Competition | null
+  isHighest: boolean
+  isLowest: boolean
 }
 
 
@@ -85,12 +96,20 @@ export default function ClubLookup({
   const [addingSaving, setAddingSaving] = useState(false)
 
   // Beheer tab
-  const [newComp, setNewComp] = useState({ name: '', country: '' })
+  const [newComp, setNewComp] = useState({ name: '', country: '', level: '' })
   const [addingComp, setAddingComp] = useState(false)
   const [deletingCompId, setDeletingCompId] = useState<string | null>(null)
 
   const [csvImporting, setCsvImporting] = useState(false)
   const [csvResult, setCsvResult] = useState<{ inserted: number; updated: number; skipped: number; competitionsAdded: number } | null>(null)
+
+  // Seizoensupdate modal
+  const [showSeasonModal, setShowSeasonModal] = useState(false)
+  const [seasonStep, setSeasonStep] = useState(0)
+  const [seasonSteps, setSeasonSteps] = useState<SeasonStep[]>([])
+  const [seasonChanges, setSeasonChanges] = useState<Map<string, 'stijgt' | 'zakt'>>(new Map())
+  const [applyingUpdate, setApplyingUpdate] = useState(false)
+  const [updateResult, setUpdateResult] = useState<{ updated: number } | null>(null)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -227,12 +246,17 @@ export default function ClubLookup({
       const res = await fetch('/api/club-lookup/competitions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, name: newComp.name, country: newComp.country }),
+        body: JSON.stringify({
+          clientId,
+          name: newComp.name,
+          country: newComp.country,
+          level: newComp.level ? parseInt(newComp.level) : null,
+        }),
       })
       if (res.ok) {
         const c = await res.json()
         setCompetitions(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
-        setNewComp({ name: '', country: '' })
+        setNewComp({ name: '', country: '', level: '' })
       }
     } finally {
       setAddingComp(false)
@@ -248,6 +272,103 @@ export default function ClubLookup({
       setDeletingCompId(null)
     }
   }
+
+  // ── Seizoensupdate modal ───────────────────────────────────────────────────
+
+  function buildSeasonSteps(): SeasonStep[] {
+    const withLevel = competitions.filter(c => c.level !== null && c.level !== undefined)
+    const byCountry = new Map<string, Competition[]>()
+    for (const comp of withLevel) {
+      const key = comp.country || 'Overig'
+      if (!byCountry.has(key)) byCountry.set(key, [])
+      byCountry.get(key)!.push(comp)
+    }
+
+    const steps: SeasonStep[] = []
+    for (const [country, comps] of byCountry) {
+      // Process lowest level first (highest number = lowest division)
+      const sorted = [...comps].sort((a, b) => (b.level ?? 0) - (a.level ?? 0))
+      const levels = comps.map(c => c.level!)
+      const minLevel = Math.min(...levels)
+      const maxLevel = Math.max(...levels)
+
+      for (const comp of sorted) {
+        const higherComp = comps.find(c => c.level === comp.level! - 1) ?? null
+        const lowerComp = comps.find(c => c.level === comp.level! + 1) ?? null
+        steps.push({
+          competition: comp,
+          country,
+          clubs: clubs.filter(c => c.competition === comp.name),
+          higherCompetition: higherComp,
+          lowerCompetition: lowerComp,
+          isHighest: comp.level === minLevel,
+          isLowest: comp.level === maxLevel,
+        })
+      }
+    }
+    return steps
+  }
+
+  function openSeasonModal() {
+    const steps = buildSeasonSteps()
+    setSeasonSteps(steps)
+    setSeasonStep(0)
+    setSeasonChanges(new Map())
+    setUpdateResult(null)
+    setShowSeasonModal(true)
+  }
+
+  function toggleSeasonAction(clubId: string, action: 'stijgt' | 'zakt') {
+    setSeasonChanges(prev => {
+      const next = new Map(prev)
+      if (next.get(clubId) === action) next.delete(clubId)
+      else next.set(clubId, action)
+      return next
+    })
+  }
+
+  function getIncomingClubs(step: SeasonStep): Club[] {
+    if (!step.lowerCompetition) return []
+    return clubs.filter(
+      c => c.competition === step.lowerCompetition!.name && seasonChanges.get(c.id) === 'stijgt'
+    )
+  }
+
+  function buildBatchChanges() {
+    const changes: { clubId: string; newCompetition: string }[] = []
+    for (const [clubId, action] of seasonChanges) {
+      const step = seasonSteps.find(s => s.clubs.some(c => c.id === clubId))
+      if (!step) continue
+      const newCompetition =
+        action === 'stijgt'
+          ? (step.higherCompetition?.name ?? 'Overige')
+          : (step.lowerCompetition?.name ?? 'Overige')
+      changes.push({ clubId, newCompetition })
+    }
+    return changes
+  }
+
+  async function applySeasonUpdate() {
+    const changes = buildBatchChanges()
+    setApplyingUpdate(true)
+    try {
+      const res = await fetch('/api/club-lookup/season-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, changes }),
+      })
+      if (res.ok) {
+        const result = await res.json()
+        setUpdateResult(result)
+        const r = await fetch(`/api/club-lookup/clubs?clientId=${clientId}`)
+        if (r.ok) setClubs(await r.json())
+      }
+    } finally {
+      setApplyingUpdate(false)
+    }
+  }
+
+  const competitionsWithLevel = competitions.filter(c => c.level !== null)
 
   // ── CSV import ─────────────────────────────────────────────────────────────
   async function handleCSV(e: React.ChangeEvent<HTMLInputElement>) {
@@ -589,9 +710,19 @@ export default function ClubLookup({
 
               {/* Competities */}
               <div>
-                <h3 className="text-sm font-semibold text-zinc-300 mb-1">Competities</h3>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-sm font-semibold text-zinc-300">Competities</h3>
+                  {competitionsWithLevel.length >= 2 && (
+                    <button
+                      onClick={openSeasonModal}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-zinc-900 rounded-lg text-xs font-semibold hover:bg-zinc-100 transition-colors"
+                    >
+                      Seizoensupdate
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-zinc-500 mb-4">
-                  Worden automatisch gedetecteerd bij CSV import. Je kan ze ook manueel toevoegen of verwijderen.
+                  Worden automatisch gedetecteerd bij CSV import. Stel een <strong>niveau</strong> in (1 = hoogste) om de seizoensupdate te activeren.
                 </p>
 
                 {competitions.length === 0 && (
@@ -603,8 +734,13 @@ export default function ClubLookup({
                     <div className="divide-y divide-zinc-800">
                       {competitions.map(comp => (
                         <div key={comp.id} className="flex items-center justify-between px-4 py-3">
-                          <p className="text-sm text-zinc-200">{flag(comp.country)} {comp.name}</p>
-                          <button onClick={() => deleteCompetition(comp.id)} disabled={deletingCompId === comp.id} className="text-zinc-600 hover:text-red-400 transition-colors ml-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="text-sm text-zinc-200 truncate">{flag(comp.country)} {comp.name}</p>
+                            {comp.level !== null && (
+                              <span className="text-xs text-zinc-600 font-mono flex-shrink-0">N{comp.level}</span>
+                            )}
+                          </div>
+                          <button onClick={() => deleteCompetition(comp.id)} disabled={deletingCompId === comp.id} className="text-zinc-600 hover:text-red-400 transition-colors ml-3 flex-shrink-0">
                             {deletingCompId === comp.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
                           </button>
                         </div>
@@ -613,8 +749,10 @@ export default function ClubLookup({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
-                  <input value={newComp.name} onChange={e => setNewComp(f => ({ ...f, name: e.target.value }))} placeholder="Competitie manueel toevoegen" className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input value={newComp.name} onChange={e => setNewComp(f => ({ ...f, name: e.target.value }))} placeholder="Naam *" className="flex-1 min-w-32 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
+                  <input value={newComp.country} onChange={e => setNewComp(f => ({ ...f, country: e.target.value }))} placeholder="Land" className="w-28 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
+                  <input value={newComp.level} onChange={e => setNewComp(f => ({ ...f, level: e.target.value }))} placeholder="Niveau" type="number" min="1" className="w-20 bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm px-3 py-2 rounded-lg outline-none focus:border-zinc-500 placeholder:text-zinc-600" />
                   <button onClick={addCompetition} disabled={addingComp || !newComp.name} className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                     {addingComp ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />} Toevoegen
                   </button>
@@ -648,7 +786,7 @@ export default function ClubLookup({
         )}
       </div>
 
-      {/* ── Add club slide panel (shown on top when in clubs tab) ── */}
+      {/* ── Add club slide panel ── */}
       {showAdd && activeTab === 'clubs' && (
         <div className="absolute inset-0 z-50 flex items-start justify-end pointer-events-none">
           <div className="pointer-events-auto w-80 h-full bg-zinc-900 border-l border-zinc-800 shadow-2xl flex flex-col p-6 gap-4 overflow-y-auto">
@@ -665,6 +803,180 @@ export default function ClubLookup({
             <button onClick={saveAdd} disabled={addingSaving || !addForm.full_name || !addForm.short_name} className="flex items-center justify-center gap-2 px-4 py-2 bg-white text-zinc-900 rounded-lg text-sm font-semibold hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
               {addingSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Opslaan
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Seizoensupdate modal ── */}
+      {showSeasonModal && (
+        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl">
+
+            {updateResult ? (
+              /* ── Resultaat scherm ── */
+              <div className="p-8 flex flex-col items-center text-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
+                  <Check size={20} className="text-green-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-white mb-1">Update toegepast</h2>
+                  <p className="text-sm text-zinc-400">
+                    {updateResult.updated === 0
+                      ? 'Geen wijzigingen — alles stond al correct.'
+                      : `${updateResult.updated} ${updateResult.updated === 1 ? 'club' : 'clubs'} verplaatst naar de juiste competitie.`}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowSeasonModal(false)}
+                  className="px-6 py-2 bg-white text-zinc-900 rounded-lg text-sm font-semibold hover:bg-zinc-100 transition-colors"
+                >
+                  Sluiten
+                </button>
+              </div>
+            ) : (() => {
+              const step = seasonSteps[seasonStep]
+              if (!step) return null
+              const totalSteps = seasonSteps.length
+              const incomingClubs = getIncomingClubs(step)
+              const isLast = seasonStep === totalSteps - 1
+              const progress = Math.round(((seasonStep + 1) / totalSteps) * 100)
+
+              return (
+                <>
+                  {/* Header */}
+                  <div className="px-6 py-4 border-b border-zinc-800 flex items-start justify-between flex-shrink-0">
+                    <div>
+                      <p className="text-xs text-zinc-500 font-mono mb-0.5">
+                        {step.country} · stap {seasonStep + 1} / {totalSteps}
+                      </p>
+                      <h2 className="text-base font-semibold text-white">{step.competition.name}</h2>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {step.isLowest
+                          ? 'Laagste niveau — zakkers gaan naar Overige'
+                          : `Zakkers → ${step.lowerCompetition?.name}`}
+                        {!step.isHighest && ` · Stijgers → ${step.higherCompetition?.name}`}
+                      </p>
+                    </div>
+                    <button onClick={() => setShowSeasonModal(false)} className="text-zinc-600 hover:text-zinc-300 mt-0.5">
+                      <X size={15} />
+                    </button>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-0.5 bg-zinc-800 flex-shrink-0">
+                    <div className="h-0.5 bg-white transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+                    {/* Inkomend van lagere competitie */}
+                    {incomingClubs.length > 0 && (
+                      <div>
+                        <p className="text-xs text-zinc-500 mb-2 font-mono uppercase tracking-wide">
+                          Inkomend van {step.lowerCompetition?.name}
+                        </p>
+                        <div className="space-y-1">
+                          {incomingClubs.map(club => (
+                            <div key={club.id} className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                              <ArrowUp size={12} className="text-blue-400 flex-shrink-0" />
+                              <span className="text-sm text-zinc-300">{club.full_name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Huidige clubs */}
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2 font-mono uppercase tracking-wide">
+                        Huidige clubs ({step.clubs.length})
+                      </p>
+                      {step.clubs.length === 0 ? (
+                        <p className="text-xs text-zinc-600">Geen clubs gevonden voor deze competitie.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {step.clubs.map(club => {
+                            const action = seasonChanges.get(club.id)
+                            return (
+                              <div
+                                key={club.id}
+                                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors ${
+                                  action === 'stijgt'
+                                    ? 'bg-green-500/10 border-green-500/20'
+                                    : action === 'zakt'
+                                    ? 'bg-red-500/10 border-red-500/20'
+                                    : 'bg-zinc-800/50 border-zinc-800'
+                                }`}
+                              >
+                                <span className="text-sm text-zinc-200 truncate">{club.full_name}</span>
+                                <div className="flex gap-1 ml-2 flex-shrink-0">
+                                  {!step.isHighest && (
+                                    <button
+                                      onClick={() => toggleSeasonAction(club.id, 'stijgt')}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                        action === 'stijgt'
+                                          ? 'bg-green-500 text-white'
+                                          : 'bg-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                      }`}
+                                    >
+                                      <ArrowUp size={10} /> Stijgt
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => toggleSeasonAction(club.id, 'zakt')}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                      action === 'zakt'
+                                        ? 'bg-red-500 text-white'
+                                        : 'bg-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                    }`}
+                                  >
+                                    <ArrowDown size={10} /> Zakt
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-5 py-4 border-t border-zinc-800 flex items-center justify-between flex-shrink-0">
+                    <button
+                      onClick={() => setSeasonStep(s => Math.max(0, s - 1))}
+                      disabled={seasonStep === 0}
+                      className="flex items-center gap-1 px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 disabled:opacity-30 transition-colors"
+                    >
+                      <ChevronLeft size={15} /> Vorige
+                    </button>
+
+                    <span className="text-xs text-zinc-600">
+                      {[...seasonChanges.values()].length} wijziging{[...seasonChanges.values()].length !== 1 ? 'en' : ''}
+                    </span>
+
+                    {isLast ? (
+                      <button
+                        onClick={applySeasonUpdate}
+                        disabled={applyingUpdate}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-white text-zinc-900 rounded-lg text-sm font-semibold hover:bg-zinc-100 disabled:opacity-40 transition-colors"
+                      >
+                        {applyingUpdate ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                        {applyingUpdate ? 'Bezig…' : 'Update toepassen'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setSeasonStep(s => Math.min(totalSteps - 1, s + 1))}
+                        className="flex items-center gap-1 px-3 py-2 text-sm text-zinc-200 hover:text-white transition-colors"
+                      >
+                        Volgende <ChevronRight size={15} />
+                      </button>
+                    )}
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}

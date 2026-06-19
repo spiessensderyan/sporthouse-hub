@@ -22,8 +22,10 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('club_lookup_competitions')
-    .select('id, name, country')
+    .select('id, name, country, level')
     .eq('client_id', clientId)
+    .order('country')
+    .order('level', { ascending: true, nullsFirst: false })
     .order('name')
 
   if (error) return new Response(error.message, { status: 500 })
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
   const user = await requireAdmin()
   if (!user) return new Response('Forbidden', { status: 403 })
 
-  const { clientId, name, country } = await req.json()
+  const { clientId, name, country, level } = await req.json()
   if (!clientId || !name) return new Response('clientId en name zijn verplicht', { status: 400 })
 
   const admin = createAdminClient()
@@ -50,7 +52,31 @@ export async function POST(req: Request) {
 
   const { data, error } = await admin
     .from('club_lookup_competitions')
-    .insert({ client_id: clientId, name: name.trim(), country: (country ?? '').trim() })
+    .insert({
+      client_id: clientId,
+      name: name.trim(),
+      country: (country ?? '').trim(),
+      level: level ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) return new Response(error.message, { status: 500 })
+  return Response.json(data)
+}
+
+export async function PUT(req: Request) {
+  const user = await requireAdmin()
+  if (!user) return new Response('Forbidden', { status: 403 })
+
+  const { id, level } = await req.json()
+  if (!id) return new Response('id required', { status: 400 })
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('club_lookup_competitions')
+    .update({ level: level ?? null })
+    .eq('id', id)
     .select()
     .single()
 
