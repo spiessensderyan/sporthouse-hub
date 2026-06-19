@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
 
   const [{ data: cfg }, { data: members }, { data: client }] = await Promise.all([
-    admin.from('content_planner_config').select('asana_project_gid, asana_extra_project_gids').eq('client_id', clientId).maybeSingle(),
+    admin.from('content_planner_config').select('asana_project_gid, asana_extra_project_gids, active_pm_email').eq('client_id', clientId).maybeSingle(),
     admin.from('content_planner_members').select('contact_name, contact_email, role').eq('client_id', clientId),
     admin.from('clients').select('name').eq('id', clientId).single(),
   ])
@@ -57,9 +57,13 @@ export async function POST(req: Request) {
   if (!cfg?.asana_project_gid) {
     return Response.json({ error: 'Geen Asana Project GID geconfigureerd.' }, { status: 400 })
   }
-  const pm = members?.find(m => m.role === 'pm')
+  // Gebruik actieve PM als die ingesteld is, anders de eerste PM
+  const activePmEmail = cfg.active_pm_email
+  const pm = activePmEmail
+    ? members?.find(m => m.role === 'pm' && m.contact_email === activePmEmail)
+    : members?.find(m => m.role === 'pm')
   if (!pm) {
-    return Response.json({ error: 'Geen PM geconfigureerd.' }, { status: 400 })
+    return Response.json({ error: 'Geen (actieve) PM geconfigureerd.' }, { status: 400 })
   }
 
   const workspaceGid = process.env.ASANA_WORKSPACE_GID
@@ -105,7 +109,7 @@ export async function POST(req: Request) {
             assignee: pmGid,
             due_on: row.date,
             notes: description,
-            projects: allProjectGids,
+            projects: [cfg.asana_project_gid],
           },
         }),
       })

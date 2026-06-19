@@ -573,3 +573,7 @@ CREATE POLICY "Service role full access club_lookup_competitions"
 -- Seizoensupdate: niveau per competitie binnen een land
 ALTER TABLE club_lookup_competitions
 ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT NULL;
+
+-- Content Planner: actieve PM per project
+ALTER TABLE content_planner_config
+ADD COLUMN IF NOT EXISTS active_pm_email TEXT DEFAULT NULL;
