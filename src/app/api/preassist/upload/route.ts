@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { isPreassistDriveConfigured, uploadPreassistFile, deletePreassistDriveFile } from '@/lib/preassist-drive'
+import { isDriveStorageConfigured, uploadFile, deleteFile, getOrCreateFolderPath, driveRootFolderId } from '@/lib/drive-storage'
 
 export const maxDuration = 60
 
@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Niet ingelogd.' }, { status: 401 })
 
-  if (!isPreassistDriveConfigured()) {
-    return NextResponse.json({ error: 'Google Drive (Pré-assist) is niet geconfigureerd.' }, { status: 503 })
+  if (!isDriveStorageConfigured()) {
+    return NextResponse.json({ error: 'Google Drive is niet geconfigureerd.' }, { status: 503 })
   }
 
   let formData: FormData
@@ -61,20 +61,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Kon bestand niet lezen.' }, { status: 500 })
   }
 
-  const folderId = process.env.GOOGLE_PREASSIST_DRIVE_FOLDER_ID!
+  const admin = createAdminClient()
+
+  const { data: edition } = await admin
+    .from('preassist_editions')
+    .select('title')
+    .eq('id', editionId)
+    .single()
+
+  if (!edition) return NextResponse.json({ error: 'Editie niet gevonden.' }, { status: 404 })
+
+  const userName = (user.user_metadata?.full_name as string | undefined) ?? user.email ?? 'Onbekend'
+  const sectionLabel = section === 'content' ? 'Content' : 'Inspiratie'
 
   let driveFile
   try {
-    driveFile = await uploadPreassistFile(buffer, file.name, file.type, folderId)
+    const folderId = await getOrCreateFolderPath(
+      ['Pré-Assist', edition.title, sectionLabel, clientName],
+      driveRootFolderId()!
+    )
+    driveFile = await uploadFile(buffer, `${userName} — ${file.name}`, file.type, folderId)
   } catch (err) {
     console.error('Pré-assist Drive upload error:', err)
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: `Fout bij uploaden naar Drive: ${msg}` }, { status: 500 })
   }
-
-  const admin = createAdminClient()
-
-  const userName = (user.user_metadata?.full_name as string | undefined) ?? user.email ?? 'Onbekend'
 
   const { data: record, error: dbError } = await admin
     .from('preassist_submissions')
@@ -100,7 +111,7 @@ export async function POST(request: NextRequest) {
 
   if (dbError) {
     console.error('Pré-assist DB insert error:', dbError)
-    try { await deletePreassistDriveFile(driveFile.id) } catch { /* best effort cleanup */ }
+    try { await deleteFile(driveFile.id) } catch { /* best effort cleanup */ }
     return NextResponse.json({ error: `Fout bij opslaan: ${dbError.message}` }, { status: 500 })
   }
 
@@ -131,7 +142,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   if (submission.drive_file_id) {
-    try { await deletePreassistDriveFile(submission.drive_file_id) } catch { /* may already be gone */ }
+    try { await deleteFile(submission.drive_file_id) } catch { /* may already be gone */ }
   }
 
   const { error } = await admin.from('preassist_submissions').delete().eq('id', id)

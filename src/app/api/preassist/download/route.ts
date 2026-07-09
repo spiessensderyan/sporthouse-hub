@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Readable } from 'stream'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { downloadPreassistFile } from '@/lib/preassist-drive'
+import { downloadFile } from '@/lib/drive-storage'
 
 export const maxDuration = 60
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const stream = await downloadPreassistFile(submission.drive_file_id)
+    const stream = await downloadFile(submission.drive_file_id)
     const webStream = Readable.toWeb(stream as Readable) as ReadableStream
     return new NextResponse(webStream, {
       headers: {
