@@ -21,7 +21,6 @@ export default async function Page() {
   return (
     <PreassistPage
       currentUserId={user.id}
-      currentUserName={user.user_metadata?.full_name ?? user.email ?? 'Onbekend'}
       isAdmin={isAdmin}
       canManageEditions={canManageEditions}
       canAdd={canAdd}

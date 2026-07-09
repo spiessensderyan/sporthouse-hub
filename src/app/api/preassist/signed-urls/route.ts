@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('preassist_submissions')
-    .select('id, file_url, file_name, file_type, submitted_by_name, section, title, client_name')
+    .select('id, file_url, file_name, file_type, submitted_by_name, section, title, client_name, storage_provider')
     .eq('edition_id', editionId)
     .order('created_at', { ascending: true })
 
@@ -25,16 +25,24 @@ export async function GET(req: NextRequest) {
   const { data: submissions, error } = await query
   if (error) return new Response(error.message, { status: 500 })
 
-  // Generate signed URLs for each file (1 hour expiry)
+  const origin = req.nextUrl.origin
+
+  // Generate a downloadable URL for each file — a Supabase signed URL (1h
+  // expiry) for legacy rows, or our own Drive download proxy for Drive rows.
   const results = await Promise.all(
     (submissions ?? []).map(async (s) => {
-      const path = s.file_url
-      const { data } = await supabase.storage
-        .from('preassist')
-        .createSignedUrl(path, 3600)
+      let signedUrl: string | null = null
+      if (s.storage_provider === 'drive') {
+        signedUrl = `${origin}/api/preassist/download?id=${s.id}`
+      } else {
+        const { data } = await supabase.storage
+          .from('preassist')
+          .createSignedUrl(s.file_url, 3600)
+        signedUrl = data?.signedUrl ?? null
+      }
       return {
         id:         s.id,
-        signedUrl:  data?.signedUrl ?? null,
+        signedUrl,
         fileName:   s.file_name,
         fileType:   s.file_type,
         section:    s.section,
