@@ -1,15 +1,14 @@
 import type { User } from '@supabase/supabase-js'
 import type { Client } from '@/types/database'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 export function filterClientsForUser(clients: Client[], user: User | null): Client[] {
   if (!user) return []
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   if (isAdmin) return clients
 
-  const perms: { sections: string[]; clients: string[] } | null = user.user_metadata?.permissions ?? null
+  const perms: { sections: string[]; clients: string[] } | null = user.app_metadata?.permissions ?? null
   if (perms === null) return clients // no permissions configured → no restrictions
 
   const allowedIds: string[] = perms.clients ?? []

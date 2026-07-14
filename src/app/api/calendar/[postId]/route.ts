@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 export async function PATCH(
   request: NextRequest,
@@ -37,10 +38,9 @@ export async function PATCH(
   return Response.json(data)
 }
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
-function allowed(user: { email?: string | null; user_metadata?: Record<string, unknown> }, section: string) {
+function allowed(user: { email?: string | null; app_metadata?: Record<string, unknown> }, section: string) {
   if (ADMIN_EMAILS.includes(user.email ?? '')) return true
-  const sections = (user.user_metadata?.permissions as { sections?: string[] } | null)?.sections ?? null
+  const sections = (user.app_metadata?.permissions as { sections?: string[] } | null)?.sections ?? null
   return sections === null || sections.includes(section)
 }
 

@@ -1,6 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 function permKey(section: string) {
   return section === 'finance' ? 'financien' : 'administratie'
@@ -21,7 +20,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   if (!doc) return new Response('Not found', { status: 404 })
 
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const pk = permKey(doc.section)
   if (!isAdmin && !sections.includes(`${pk}_bekijken`) && !sections.includes(`${pk}_beheren`)) {
@@ -51,7 +50,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   if (!doc) return new Response('Not found', { status: 404 })
 
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const pk = permKey(doc.section)
   const canManage = isAdmin || sections.includes(`${pk}_beheren`)
@@ -94,7 +93,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
   if (!doc) return new Response('Not found', { status: 404 })
 
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const pk = permKey(doc.section)
   const canManage = isAdmin || sections.includes(`${pk}_beheren`)

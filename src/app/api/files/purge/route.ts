@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { deleteFile } from '@/lib/drive-storage'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 function adminClient() {
   return createAdminClient(
@@ -12,8 +11,8 @@ function adminClient() {
   )
 }
 
-function isAdminUser(user: { email?: string | null; user_metadata?: Record<string, unknown> }) {
-  const permsObj = (user.user_metadata?.permissions as { sections?: string[] } | null) ?? null
+function isAdminUser(user: { email?: string | null; app_metadata?: Record<string, unknown> }) {
+  const permsObj = (user.app_metadata?.permissions as { sections?: string[] } | null) ?? null
   const sections = permsObj?.sections ?? []
   return ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
 }

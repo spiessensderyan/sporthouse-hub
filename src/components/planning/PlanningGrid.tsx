@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ChevronLeft, ChevronRight, Loader2, Settings } from 'lucide-react'
 import { DEPARTMENTS, DUTCH_MONTHS, getDaysInMonth, cellKey, Department } from '@/lib/planning-config'
 import PlanningConfigModal from '@/components/planning/PlanningConfigModal'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,8 +26,6 @@ interface Sel {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ADMIN_EMAILS_P = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
 const DAY_W  = 100
 const DATE_W = 48
@@ -158,9 +157,9 @@ export default function PlanningGrid() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      const permsObj = user.user_metadata?.permissions ?? null
+      const permsObj = user.app_metadata?.permissions ?? null
       const sections: string[] = permsObj?.sections ?? []
-      const isAdmin = ADMIN_EMAILS_P.includes(user.email ?? '') || sections.includes('beheer')
+      const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
       if (isAdmin || permsObj === null || sections.includes('planning_volledig')) {
         setCanEditAll(true)
       } else {

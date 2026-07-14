@@ -3,8 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Client } from '@/types/database'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 const LOGO_MAP: Record<string, string> = {
   'Pro League':               '/logos/proleague.jpg',
@@ -63,8 +62,8 @@ export default async function ClientLayout({ children, params }: Props) {
 
   // Check client access permissions
   if (user) {
-    const sections: string[] = user.user_metadata?.permissions?.sections ?? []
-    const perms: { sections: string[]; clients: string[] } | null = user.user_metadata?.permissions ?? null
+    const sections: string[] = user.app_metadata?.permissions?.sections ?? []
+    const perms: { sections: string[]; clients: string[] } | null = user.app_metadata?.permissions ?? null
     const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
     if (!isAdmin && perms !== null) {
       const allowedClients: string[] = perms.clients ?? []

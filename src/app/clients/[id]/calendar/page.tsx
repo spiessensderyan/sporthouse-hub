@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import ContentCalendar from '@/components/calendar/ContentCalendar'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -20,7 +19,7 @@ export default async function CalendarPage({ params }: Props) {
   if (!client) notFound()
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? '')
-  const permsObj = user?.user_metadata?.permissions ?? null
+  const permsObj = user?.app_metadata?.permissions ?? null
   const sections: string[] = permsObj?.sections ?? []
   const canAdd    = isAdmin || permsObj === null || sections.includes('contentkalender_toevoegen')
   const canDelete = isAdmin || permsObj === null || sections.includes('contentkalender_verwijderen')

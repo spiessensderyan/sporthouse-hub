@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Send, Hash, Plus, Loader2, Trash2, X, ChevronDown, ChevronRight, MoreHorizontal, Pencil, FolderPlus, Paperclip, FileText, Download, GripVertical, Smile } from 'lucide-react'
 import Picker from '@emoji-mart/react'
 import data from '@emoji-mart/data'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 import {
   DndContext, DragEndEvent,
   PointerSensor, useSensor, useSensors, closestCenter,
@@ -102,8 +103,6 @@ function isGrouped(prev: Message, curr: Message) {
     new Date(curr.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
   )
 }
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
 // ─── Attachment renderer ──────────────────────────────────────────────────────
 
