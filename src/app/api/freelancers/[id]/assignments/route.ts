@@ -1,12 +1,11 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 async function assertAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   return isAdmin ? user : null
 }

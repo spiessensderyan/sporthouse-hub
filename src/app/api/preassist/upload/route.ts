@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { isDriveStorageConfigured, uploadFile, deleteFile, getOrCreateFolderPath, driveRootFolderId } from '@/lib/drive-storage'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 export const maxDuration = 60
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 const MAX_SIZE = 500 * 1024 * 1024 // 500 MB — Drive can hold far more; the practical
 // ceiling is Vercel's serverless request body limit, not this check.
 
-function permissions(user: { email?: string | null; user_metadata?: Record<string, unknown> }) {
-  const permsObj = (user.user_metadata?.permissions as { sections?: string[] } | null) ?? null
+function permissions(user: { email?: string | null; app_metadata?: Record<string, unknown> }) {
+  const permsObj = (user.app_metadata?.permissions as { sections?: string[] } | null) ?? null
   const sections = permsObj?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const canDeleteAll = isAdmin || permsObj === null || sections.includes('preassist_verwijderen')

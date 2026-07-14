@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 import {
   isDriveStorageConfigured, uploadFile, deleteFile, downloadFile, updateFileContent, moveFile, trashFile,
 } from '@/lib/drive-storage'
@@ -9,7 +10,6 @@ import { resolveDriveFolderId } from '@/lib/client-files-drive'
 export const maxDuration = 60 // prevent hanging
 
 const MAX_SIZE = 500 * 1024 * 1024 // 500 MB, matches proxyClientMaxBodySize in next.config.mjs
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
 function adminClient() {
   return createAdminClient(
@@ -20,14 +20,14 @@ function adminClient() {
 
 // Grants delete/restore for ANY file (all clients). Without it, someone can
 // still delete/restore files they personally uploaded — see canManageFile.
-function canDeleteFiles(user: { email?: string | null; user_metadata?: Record<string, unknown> }) {
-  const permsObj = (user.user_metadata?.permissions as { sections?: string[] } | null) ?? null
+function canDeleteFiles(user: { email?: string | null; app_metadata?: Record<string, unknown> }) {
+  const permsObj = (user.app_metadata?.permissions as { sections?: string[] } | null) ?? null
   const sections = permsObj?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   return isAdmin || permsObj === null || sections.includes('bestanden_verwijderen')
 }
 
-function canManageFile(user: { email?: string | null; user_metadata?: Record<string, unknown> }, uploadedBy: string | null) {
+function canManageFile(user: { email?: string | null; app_metadata?: Record<string, unknown> }, uploadedBy: string | null) {
   return canDeleteFiles(user) || (uploadedBy !== null && uploadedBy === user.email)
 }
 

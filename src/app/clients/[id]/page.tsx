@@ -2,9 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FolderOpen, Mic, PenLine, BrainCircuit, ArrowRight, Gift, Scissors, CalendarDays, CalendarRange, GraduationCap, BarChart2, Landmark, ClipboardList, LayoutList, Search, FileText } from 'lucide-react'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
-
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 interface Tool {
   id: string
@@ -31,7 +29,7 @@ export default async function ClientToolsPage({ params }: Props) {
 
   if (!client) notFound()
 
-  const permsObj = user?.user_metadata?.permissions ?? null
+  const permsObj = user?.app_metadata?.permissions ?? null
   const sections: string[] = permsObj?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? '') || sections.includes('beheer')
   const canSeeWelkom = isAdmin || permsObj === null || sections.includes('welkom_stagiair')

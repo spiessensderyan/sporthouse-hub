@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon,
   X, Loader2, AlertCircle, Trash2, BarChart3, Search, Info, Calendar
@@ -151,7 +152,6 @@ const EQUIP_COL_W   = 100
 const COLLAPSED_W   = 36
 const ROW_H         = 38
 const HEADER_H      = 110
-const ADMIN_EMAILS  = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
 // ─── Modal base ───────────────────────────────────────────────────────────────
 
@@ -769,7 +769,7 @@ export default function EquipmentPlanner() {
       if (!user) return
       const meta = user.user_metadata ?? {}
       setCurrentUser(meta.full_name ?? meta.name ?? meta.email ?? user.email ?? '')
-      const permsObj = meta.permissions ?? null
+      const permsObj = user.app_metadata?.permissions ?? null
       const sections: string[] = permsObj?.sections ?? []
       const admin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
       setIsAdmin(admin)

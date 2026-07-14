@@ -1,16 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import EventCalendar from '@/components/calendar/EventCalendar'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 export const metadata = { title: 'Projectkalender — Sporthouse' }
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 
 export default async function EventsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   const isAdmin = ADMIN_EMAILS.includes(user?.email ?? '')
-  const permsObj = user?.user_metadata?.permissions ?? null
+  const permsObj = user?.app_metadata?.permissions ?? null
   const sections: string[] = permsObj?.sections ?? []
   const canAdd    = isAdmin || permsObj === null || sections.includes('projectkalender_toevoegen')
   const canDelete = isAdmin || permsObj === null || sections.includes('projectkalender_verwijderen')

@@ -1,7 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import webpush from 'web-push'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL!,
@@ -13,7 +12,7 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   if (!isAdmin) return new Response('Forbidden', { status: 403 })
 

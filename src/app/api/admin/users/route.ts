@@ -1,12 +1,11 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const ok = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   return ok ? user : null
 }
@@ -24,8 +23,8 @@ export async function GET() {
     id:          u.id,
     email:       u.email ?? '',
     full_name:   u.user_metadata?.full_name ?? u.user_metadata?.name ?? '',
-    permissions: u.user_metadata?.permissions ?? null,
-    expires_at:  u.user_metadata?.expires_at ?? null,
+    permissions: u.app_metadata?.permissions ?? null,
+    expires_at:  u.app_metadata?.expires_at ?? null,
     last_sign_in: u.last_sign_in_at ?? null,
     created_at:  u.created_at,
     confirmed:   !!u.email_confirmed_at,
@@ -45,10 +44,14 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
 
   // Create pre-approved user (email pre-confirmed so Google OAuth linking works)
+  // Role/access fields go in app_metadata — it's server-only, unlike user_metadata
+  // which the client can rewrite via supabase.auth.updateUser().
   const { data, error } = await admin.auth.admin.createUser({
     email: email.trim(),
     user_metadata: {
-      full_name:   full_name?.trim() ?? '',
+      full_name: full_name?.trim() ?? '',
+    },
+    app_metadata: {
       allowed:     true,
       permissions: permissions ?? null,
     },

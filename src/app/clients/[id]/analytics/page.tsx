@@ -1,8 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
 import AnalyticsDashboard from '@/components/analytics/AnalyticsDashboard'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 interface Props {
   params: Promise<{ id: string }>

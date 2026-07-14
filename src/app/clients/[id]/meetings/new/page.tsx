@@ -3,8 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import MeetingRecorder from '@/components/clients/MeetingRecorder'
 import { ArrowLeft } from 'lucide-react'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -22,7 +21,7 @@ export default async function NewMeetingPage({ params }: Props) {
   if (!client) notFound()
 
   const isAdmin  = ADMIN_EMAILS.includes(user?.email ?? '')
-  const permsObj = user?.user_metadata?.permissions ?? null
+  const permsObj = user?.app_metadata?.permissions ?? null
   const sections: string[] = permsObj?.sections ?? []
   const canAccess = isAdmin || permsObj === null || sections.includes('vergaderingen')
   if (!canAccess) redirect(`/clients/${id}`)
