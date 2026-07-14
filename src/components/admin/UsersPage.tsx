@@ -107,6 +107,12 @@ const SECTION_GROUPS = [
     ],
   },
   {
+    title: 'Klantbestanden',
+    sections: [
+      { key: 'bestanden_verwijderen', label: 'Bestanden verwijderen (alle klanten)' },
+    ],
+  },
+  {
     title: 'Pré-assist',
     sections: [
       { key: 'preassist',            label: 'Pré-assist bekijken' },
