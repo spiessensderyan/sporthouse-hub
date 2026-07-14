@@ -3,11 +3,12 @@
 import { useState } from 'react'
 import { FileRecord } from '@/types/database'
 import {
-  Search, Trash2, Download, Loader2,
+  Search, Trash2, Download, Loader2, Eye,
   FileText, FileImage, FileVideo, FileAudio,
   FileArchive, File, FileCode, FileType2
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { DrivePreviewModal } from '@/components/shared/DrivePreview'
 
 interface Props {
   files: FileRecord[]
@@ -45,6 +46,7 @@ export default function FileList({ files, clientId: _clientId, currentUserEmail 
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [previewFile, setPreviewFile] = useState<FileRecord | null>(null)
   const router = useRouter()
 
   const filtered = files.filter(f =>
@@ -153,6 +155,15 @@ export default function FileList({ files, clientId: _clientId, currentUserEmail 
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {file.storage_provider === 'drive' && file.drive_file_id && (
+                    <button
+                      onClick={() => setPreviewFile(file)}
+                      className="p-1.5 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-800 transition-all"
+                      title="Bekijken"
+                    >
+                      <Eye size={13} />
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDownload(file)}
                     disabled={downloadingId === file.id}
@@ -182,6 +193,16 @@ export default function FileList({ files, clientId: _clientId, currentUserEmail 
             )
           })}
         </div>
+      )}
+
+      {previewFile?.drive_file_id && (
+        <DrivePreviewModal
+          driveFileId={previewFile.drive_file_id}
+          title={previewFile.filename}
+          webViewLink={previewFile.web_view_link}
+          downloadHref={`/api/files/download?id=${previewFile.id}`}
+          onClose={() => setPreviewFile(null)}
+        />
       )}
     </div>
   )

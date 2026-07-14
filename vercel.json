@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/expire-users",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/purge-trash",
+      "schedule": "0 3 * * *"
     }
   ]
 }

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { Client } from '@/types/database'
+import { DriveThumbnail, DrivePreviewModal } from '@/components/shared/DrivePreview'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,10 @@ interface Submission {
   client_name: string | null
   created_at: string
   signedUrl?: string
+  storage_provider?: 'supabase' | 'drive'
+  drive_file_id?: string | null
+  web_view_link?: string | null
+  thumbnail_link?: string | null
 }
 
 type Section = 'content' | 'inspiratie'
@@ -52,27 +57,39 @@ function formatSize(bytes: number | null) {
 
 function isVideo(type: string) { return type.startsWith('video/') }
 
+const MAX_UPLOAD_SIZE = 500 * 1024 * 1024 // 500 MB, matches server-side cap
+
 // ─── Submission card ──────────────────────────────────────────────────────────
 
 function SubmissionCard({ sub, canDelete, onDelete }: {
   sub: Submission
   canDelete: boolean
-  onDelete: (id: string, filePath: string) => void
+  onDelete: (id: string, filePath: string, provider?: string) => void
 }) {
   const video = isVideo(sub.file_type)
+  const isDrive = sub.storage_provider === 'drive'
+  const [previewOpen, setPreviewOpen] = useState(false)
+
+  // Drive thumbnails are generated async by Google and may briefly be null
+  // right after upload — fall back to the (legacy) signed URL, then to an icon.
+  const previewSrc = isDrive ? (sub.thumbnail_link ?? undefined) : sub.signedUrl
+  const openLink = isDrive ? sub.web_view_link ?? undefined : sub.signedUrl
+  const downloadHref = isDrive ? `/api/preassist/download?id=${sub.id}` : sub.signedUrl
 
   return (
     <div className="group relative rounded-xl overflow-hidden"
       style={{ background: 'rgba(22,22,22,0.98)', border: '1px solid rgba(255,255,255,0.09)' }}>
       <div className="relative aspect-video bg-zinc-900 overflow-hidden">
-        {sub.signedUrl ? (
-          video ? (
-            <video src={sub.signedUrl} className="w-full h-full object-cover" preload="metadata" muted
+        {previewSrc ? (
+          video && !isDrive ? (
+            <video src={previewSrc} className="w-full h-full object-cover" preload="metadata" muted
               onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play()}
               onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0 }} />
+          ) : isDrive ? (
+            <DriveThumbnail src={previewSrc} alt={sub.title ?? sub.file_name} video={video} />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={sub.signedUrl} alt={sub.title ?? sub.file_name} className="w-full h-full object-cover" />
+            <img src={previewSrc} alt={sub.title ?? sub.file_name} className="w-full h-full object-cover" />
           )
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-700">
@@ -85,14 +102,25 @@ function SubmissionCard({ sub, canDelete, onDelete }: {
           </div>
         )}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-          {sub.signedUrl && (
-            <a href={sub.signedUrl} download={sub.file_name}
+          {isDrive && sub.drive_file_id ? (
+            <button onClick={() => setPreviewOpen(true)}
+              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
+              {video ? <Film size={15} /> : <ImageIcon size={15} />}
+            </button>
+          ) : openLink && (
+            <a href={openLink}
+              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
+              {video ? <Film size={15} /> : <ImageIcon size={15} />}
+            </a>
+          )}
+          {downloadHref && (
+            <a href={downloadHref} download={sub.file_name}
               className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
               <Download size={15} />
             </a>
           )}
           {canDelete && (
-            <button onClick={() => onDelete(sub.id, sub.file_url)}
+            <button onClick={() => onDelete(sub.id, sub.file_url, sub.storage_provider)}
               className="p-2 rounded-lg bg-red-600/80 hover:bg-red-500 text-white transition-colors">
               <Trash2 size={15} />
             </button>
@@ -109,6 +137,11 @@ function SubmissionCard({ sub, canDelete, onDelete }: {
           {sub.file_size && <p className="text-xs text-zinc-600 flex-shrink-0">{formatSize(sub.file_size)}</p>}
         </div>
       </div>
+
+      {previewOpen && isDrive && sub.drive_file_id && (
+        <DrivePreviewModal driveFileId={sub.drive_file_id} title={sub.title ?? sub.file_name}
+          webViewLink={sub.web_view_link} downloadHref={downloadHref} onClose={() => setPreviewOpen(false)} />
+      )}
     </div>
   )
 }
@@ -124,11 +157,9 @@ interface FileEntry {
   error?: string
 }
 
-function UploadModal({ section, editionId, userId, userName, onClose, onUploaded }: {
+function UploadModal({ section, editionId, onClose, onUploaded }: {
   section: Section
   editionId: string
-  userId: string
-  userName: string
   onClose: () => void
   onUploaded: () => void
 }) {
@@ -137,6 +168,7 @@ function UploadModal({ section, editionId, userId, userName, onClose, onUploaded
   const [clients,   setClients]   = useState<Client[]>([])
   const [uploading, setUploading] = useState(false)
   const [done,      setDone]      = useState(false)
+  const [rejected,  setRejected]  = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -154,8 +186,18 @@ function UploadModal({ section, editionId, userId, userName, onClose, onUploaded
   function addFiles(incoming: FileList | null) {
     if (!incoming) return
     const defaultClient = clients[0]
-    const newEntries: FileEntry[] = Array.from(incoming)
-      .filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+    const all = Array.from(incoming)
+    const wrongType = all.some(f => !f.type.startsWith('image/') && !f.type.startsWith('video/'))
+    const tooBig    = all.some(f => f.size > MAX_UPLOAD_SIZE)
+
+    setRejected(
+      tooBig ? `Eén of meer bestanden zijn groter dan ${MAX_UPLOAD_SIZE / 1024 / 1024} MB en werden overgeslagen.`
+      : wrongType ? 'Enkel afbeeldingen en video\'s zijn toegelaten — andere bestanden werden overgeslagen.'
+      : null
+    )
+
+    const newEntries: FileEntry[] = all
+      .filter(f => (f.type.startsWith('image/') || f.type.startsWith('video/')) && f.size <= MAX_UPLOAD_SIZE)
       .map(file => ({
         file,
         clientId:   defaultClient?.id   ?? '',
@@ -182,23 +224,18 @@ function UploadModal({ section, editionId, userId, userName, onClose, onUploaded
       entries.map(async (entry, i) => {
         setEntries(prev => prev.map((e, j) => j === i ? { ...e, status: 'uploading' } : e))
         try {
-          const ext      = entry.file.name.split('.').pop()
-          const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-          const path     = `${editionId}/${section}/${entry.clientId}/${userId}/${safeName}`
+          const body = new FormData()
+          body.set('file', entry.file)
+          body.set('editionId', editionId)
+          body.set('section', section)
+          body.set('clientId', entry.clientId)
+          body.set('clientName', entry.clientName)
 
-          const { error: uploadError } = await supabase.storage
-            .from('preassist').upload(path, entry.file, { upsert: false })
-          if (uploadError) throw uploadError
-
-          const { error: dbError } = await supabase.from('preassist_submissions').insert({
-            edition_id: editionId, section,
-            title:      null,
-            file_url:   path, file_name: entry.file.name,
-            file_type:  entry.file.type, file_size: entry.file.size,
-            submitted_by_id: userId, submitted_by_name: userName,
-            client_id: entry.clientId, client_name: entry.clientName,
-          })
-          if (dbError) throw dbError
+          const res = await fetch('/api/preassist/upload', { method: 'POST', body })
+          if (!res.ok) {
+            const { error } = await res.json().catch(() => ({ error: `Upload mislukt (${res.status}).` }))
+            throw new Error(error ?? 'Upload mislukt.')
+          }
 
           setEntries(prev => prev.map((e, j) => j === i ? { ...e, status: 'done', progress: 100 } : e))
         } catch (err) {
@@ -254,6 +291,8 @@ function UploadModal({ section, editionId, userId, userName, onClose, onUploaded
             <input ref={inputRef} type="file" multiple accept="image/*,video/*" className="hidden"
               onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           </div>
+
+          {rejected && <p className="text-xs text-amber-400 mb-3">{rejected}</p>}
 
           {/* File rows */}
           {entries.length > 0 && (
@@ -457,7 +496,7 @@ function ClientGroup({ clientName, submissions, currentUserId, isAdmin, canDelet
   currentUserId: string
   isAdmin: boolean
   canDeleteAll: boolean
-  onDelete: (id: string, filePath: string) => void
+  onDelete: (id: string, filePath: string, provider?: string) => void
 }) {
   return (
     <div className="mb-8">
@@ -482,9 +521,8 @@ function ClientGroup({ clientName, submissions, currentUserId, isAdmin, canDelet
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function PreassistPage({ currentUserId, currentUserName, isAdmin, canManageEditions, canAdd, canDeleteAll }: {
+export default function PreassistPage({ currentUserId, isAdmin, canManageEditions, canAdd, canDeleteAll }: {
   currentUserId: string
-  currentUserName: string
   isAdmin: boolean
   canManageEditions: boolean
   canAdd: boolean
@@ -523,6 +561,7 @@ export default function PreassistPage({ currentUserId, currentUserName, isAdmin,
 
     const subs = (data ?? []) as Submission[]
     const withUrls = await Promise.all(subs.map(async s => {
+      if (s.storage_provider === 'drive') return s // thumbnail_link/web_view_link already on the row
       const { data: signed } = await supabase.storage.from('preassist').createSignedUrl(s.file_url, 3600)
       return { ...s, signedUrl: signed?.signedUrl }
     }))
@@ -534,9 +573,13 @@ export default function PreassistPage({ currentUserId, currentUserName, isAdmin,
     loadEditions().then(active => { if (active) loadSubmissions(active); else setLoading(false) })
   }, [loadEditions, loadSubmissions])
 
-  async function handleDelete(id: string, filePath: string) {
-    await supabase.storage.from('preassist').remove([filePath])
-    await supabase.from('preassist_submissions').delete().eq('id', id)
+  async function handleDelete(id: string, filePath: string, provider?: string) {
+    if (provider === 'drive') {
+      await fetch(`/api/preassist/upload?id=${id}`, { method: 'DELETE' })
+    } else {
+      await supabase.storage.from('preassist').remove([filePath])
+      await supabase.from('preassist_submissions').delete().eq('id', id)
+    }
     setSubmissions(prev => prev.filter(s => s.id !== id))
   }
 
@@ -713,7 +756,6 @@ export default function PreassistPage({ currentUserId, currentUserName, isAdmin,
 
       {showUpload && activeEdition && (
         <UploadModal section={section} editionId={activeEdition.id}
-          userId={currentUserId} userName={currentUserName}
           onClose={() => setShowUpload(false)} onUploaded={() => loadSubmissions(activeEdition)} />
       )}
 

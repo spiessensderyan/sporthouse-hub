@@ -24,9 +24,16 @@ export interface FileRecord {
   description: string | null
   file_type: string
   file_size: number
-  storage_path: string
+  storage_path: string | null
   uploaded_by: string | null
+  folder_id?: string | null
   created_at: string
+  storage_provider?: 'supabase' | 'drive'
+  drive_file_id?: string | null
+  deleted_at?: string | null
+  deleted_by?: string | null
+  web_view_link?: string | null
+  thumbnail_link?: string | null
 }
 
 export interface Post {
