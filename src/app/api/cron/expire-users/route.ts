@@ -15,7 +15,7 @@ export async function GET() {
 
   const now = new Date()
   const expired = users.filter(u => {
-    const expiresAt = u.user_metadata?.expires_at
+    const expiresAt = u.app_metadata?.expires_at
     return expiresAt && new Date(expiresAt) <= now
   })
 
