@@ -10,6 +10,7 @@ import { LayoutDashboard, KanbanSquare, CalendarDays, CalendarRange, Users, LogO
 import { cn } from '@/lib/utils'
 import { getLogo } from '@/lib/logos'
 import { usePreview } from '@/lib/preview-context'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 interface SidebarProps {
   clients: Client[]
@@ -83,8 +84,6 @@ function NavGroup({ title, clients, pathname }: {
   )
 }
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
-
 interface Permissions { sections: string[]; clients: string[] }
 
 export default function Sidebar({ clients }: SidebarProps) {
@@ -101,10 +100,10 @@ export default function Sidebar({ clients }: SidebarProps) {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
       userEmailRef.current = user.email ?? null
-      const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+      const sections: string[] = user.app_metadata?.permissions?.sections ?? []
       const admin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
       setRealIsAdmin(admin)
-      if (!admin) setRealPermissions(user.user_metadata?.permissions ?? null)
+      if (!admin) setRealPermissions(user.app_metadata?.permissions ?? null)
     })
   }, [])
 

@@ -31,17 +31,35 @@ export async function updateSession(request: NextRequest) {
   const isLoginPage  = pathname.startsWith('/login')
   const isPortalPage = pathname.startsWith('/portal')
   const isApiPage    = pathname.startsWith('/api')
+  const isPortalApiPage = pathname.startsWith('/api/portal')
+  const isAuthApiPage   = pathname.startsWith('/api/auth')
   const isCallbackPage = pathname.startsWith('/auth')
 
-  // Unauthenticated → login
+  // Unauthenticated → login (API routes get a 401 instead of a redirect)
   if (!user && !isLoginPage && !isCallbackPage) {
+    if (isApiPage) {
+      return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   if (user) {
-    const isFreelancer = user.user_metadata?.freelancer === true
+    const isFreelancer = user.app_metadata?.freelancer === true
+
+    // Freelancers only get /api/portal/* and /api/auth/* — every other API
+    // route serves staff-only business data and must never be reachable by
+    // a freelancer account, regardless of what any individual route checks.
+    if (isFreelancer && isApiPage && !isPortalApiPage && !isAuthApiPage) {
+      return new NextResponse(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
     // Freelancer on login page or main app → portal
     if (isFreelancer && !isPortalPage && !isApiPage && !isCallbackPage) {

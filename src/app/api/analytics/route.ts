@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { OAuth2Client } from 'google-auth-library'
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
 const PROPERTY_ID = process.env.GA4_PROPERTY_ID
 
 async function getAccessToken(): Promise<string> {

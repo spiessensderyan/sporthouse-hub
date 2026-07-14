@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Freelancers go to /portal
-  const isFreelancer = user.user_metadata?.freelancer === true
+  const isFreelancer = user.app_metadata?.freelancer === true
   if (isFreelancer) {
     return NextResponse.redirect(`${origin}/portal`)
   }

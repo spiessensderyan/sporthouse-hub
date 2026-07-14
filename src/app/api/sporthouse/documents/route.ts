@@ -1,6 +1,5 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 function safeStorageName(name: string): string {
   return name
@@ -22,7 +21,7 @@ export async function GET(req: Request) {
   const section = new URL(req.url).searchParams.get('section')
   if (!section) return new Response('Missing section', { status: 400 })
 
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const pk = permKey(section)
   if (!isAdmin && !sections.includes(`${pk}_bekijken`) && !sections.includes(`${pk}_beheren`)) {
@@ -52,7 +51,7 @@ export async function POST(req: Request) {
 
   if (!section || !file) return new Response('Missing section or file', { status: 400 })
 
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const isAdmin = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   const pk = permKey(section)
   if (!isAdmin && !sections.includes(`${pk}_beheren`)) {

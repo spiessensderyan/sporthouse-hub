@@ -1,12 +1,11 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-
-const ADMIN_EMAILS = ['arne.smets@sporthousegroup.com', 'deryan.spiessens@sporthousegroup.com']
+import { ADMIN_EMAILS } from '@/lib/auth-permissions'
 
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const sections: string[] = user.user_metadata?.permissions?.sections ?? []
+  const sections: string[] = user.app_metadata?.permissions?.sections ?? []
   const ok = ADMIN_EMAILS.includes(user.email ?? '') || sections.includes('beheer')
   return ok ? user : null
 }
@@ -23,12 +22,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const admin = createAdminClient()
 
   const { data: { user: existing } } = await admin.auth.admin.getUserById(id)
-  const updated: Record<string, unknown> = { ...existing?.user_metadata }
+  const updated: Record<string, unknown> = { ...existing?.app_metadata }
   if (permissions !== undefined) updated.permissions = permissions
   if (expires_at !== undefined) updated.expires_at = expires_at || null
   updated.allowed = true  // always mark as approved when admin saves
 
-  const { error } = await admin.auth.admin.updateUserById(id, { user_metadata: updated })
+  const { error } = await admin.auth.admin.updateUserById(id, { app_metadata: updated })
   if (error) return new Response(error.message, { status: 500 })
   return new Response(null, { status: 204 })
 }

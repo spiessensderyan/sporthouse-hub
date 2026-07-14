@@ -50,7 +50,8 @@ export async function POST(req: Request) {
     const admin = createAdminClient()
     await admin.auth.admin.createUser({
       email: email.trim(),
-      user_metadata: { freelancer: true, full_name: name.trim() },
+      user_metadata: { full_name: name.trim() },
+      app_metadata: { freelancer: true },
       email_confirm: true,
     })
     // Ignore error if user already exists
