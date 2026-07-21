@@ -1,10 +1,18 @@
+import { Readable } from 'stream'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { ADMIN_EMAILS } from '@/lib/auth-permissions'
+import { downloadFile, updateFileContent, deleteFile } from '@/lib/drive-storage'
+
+export const maxDuration = 60
 
 function permKey(section: string) {
   return section === 'finance' ? 'financien' : 'administratie'
 }
 
+// Streams the file directly through our own server rather than handing back
+// a URL — these documents are never made public in Drive (no sharePublicly),
+// so this route is the only way to reach them at all, and it's the one place
+// that enforces financien/administratie permissions on every single read.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
@@ -27,12 +35,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     return new Response('Forbidden', { status: 403 })
   }
 
+  if (doc.storage_provider === 'drive' && doc.drive_file_id) {
+    try {
+      const stream = await downloadFile(doc.drive_file_id)
+      const webStream = Readable.toWeb(stream as Readable) as ReadableStream
+      return new Response(webStream, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(doc.filename)}"`,
+        },
+      })
+    } catch (err) {
+      console.error('Drive download error:', err)
+      return new Response('Kon bestand niet downloaden.', { status: 500 })
+    }
+  }
+
+  if (!doc.storage_path) return new Response('Not found', { status: 404 })
   const { data: signedData } = await admin.storage
     .from('sporthouse-internal')
     .createSignedUrl(doc.storage_path, 3600)
 
   if (!signedData) return new Response('Could not generate URL', { status: 500 })
-  return Response.json({ url: signedData.signedUrl, filename: doc.filename })
+  return Response.redirect(signedData.signedUrl)
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -63,12 +88,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (typeof content !== 'string') return new Response('Missing content', { status: 400 })
 
   const bytes = new TextEncoder().encode(content)
+  const buffer = Buffer.from(bytes)
 
-  const { error: storErr } = await admin.storage
-    .from('sporthouse-internal')
-    .update(doc.storage_path, bytes, { contentType: 'text/plain; charset=utf-8', upsert: true })
+  if (doc.storage_provider === 'drive' && doc.drive_file_id) {
+    try {
+      await updateFileContent(doc.drive_file_id, buffer, 'text/plain; charset=utf-8')
+    } catch (err) {
+      console.error('Drive update error:', err)
+      return new Response('Kon bestand niet opslaan.', { status: 500 })
+    }
+  } else {
+    if (!doc.storage_path) return new Response('Not found', { status: 404 })
+    const { error: storErr } = await admin.storage
+      .from('sporthouse-internal')
+      .update(doc.storage_path, bytes, { contentType: 'text/plain; charset=utf-8', upsert: true })
 
-  if (storErr) return new Response(storErr.message, { status: 500 })
+    if (storErr) return new Response(storErr.message, { status: 500 })
+  }
 
   await admin
     .from('sporthouse_documents')
@@ -102,7 +138,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     return new Response('Forbidden', { status: 403 })
   }
 
-  await admin.storage.from('sporthouse-internal').remove([doc.storage_path])
+  if (doc.storage_provider === 'drive' && doc.drive_file_id) {
+    try { await deleteFile(doc.drive_file_id) } catch (err) { console.error('Drive delete error:', err) }
+  } else if (doc.storage_path) {
+    await admin.storage.from('sporthouse-internal').remove([doc.storage_path])
+  }
+
   await admin.from('sporthouse_documents').delete().eq('id', id)
   return new Response('OK')
 }

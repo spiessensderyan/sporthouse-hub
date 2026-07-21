@@ -122,11 +122,10 @@ export default function DocumentManager({ section, canManage, currentUserEmail }
     try {
       const res = await fetch(`/api/sporthouse/documents/${doc.id}`)
       if (!res.ok) throw new Error()
-      const { url, filename } = await res.json()
-      const blob = await (await fetch(url)).blob()
+      const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = filename
+      a.download = doc.filename
       a.click()
       URL.revokeObjectURL(a.href)
     } catch {
@@ -150,8 +149,7 @@ export default function DocumentManager({ section, canManage, currentUserEmail }
     try {
       const res = await fetch(`/api/sporthouse/documents/${doc.id}`)
       if (!res.ok) throw new Error()
-      const { url } = await res.json()
-      const text = await (await fetch(url)).text()
+      const text = await res.text()
       setEditContent(text)
     } catch {
       setEditError('Kon bestand niet laden.')

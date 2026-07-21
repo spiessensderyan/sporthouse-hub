@@ -1,13 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { ADMIN_EMAILS } from '@/lib/auth-permissions'
+import { isSporthouseDriveConfigured, uploadFile, getOrCreateFolderPath, sporthouseRootFolderId, deleteFile } from '@/lib/drive-storage'
 
-function safeStorageName(name: string): string {
-  return name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_')
-}
+export const maxDuration = 60
 
 function permKey(section: string) {
   return section === 'finance' ? 'financien' : 'administratie'
@@ -58,16 +53,23 @@ export async function POST(req: Request) {
     return new Response('Forbidden', { status: 403 })
   }
 
-  const admin = createAdminClient()
+  if (!isSporthouseDriveConfigured()) {
+    return new Response('Google Drive is niet geconfigureerd.', { status: 503 })
+  }
+
   const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : ''
-  const storagePath = `${section}/${Date.now()}-${safeStorageName(file.name)}`
+  const buffer = Buffer.from(await file.arrayBuffer())
 
-  const { error: storErr } = await admin.storage
-    .from('sporthouse-internal')
-    .upload(storagePath, await file.arrayBuffer(), { contentType: file.type || 'application/octet-stream' })
+  let driveFile
+  try {
+    const folderId = await getOrCreateFolderPath([section], sporthouseRootFolderId()!)
+    driveFile = await uploadFile(buffer, file.name, file.type || 'application/octet-stream', folderId, { public: false })
+  } catch (err) {
+    console.error('Drive upload error:', err)
+    return new Response('Upload naar Drive mislukt.', { status: 500 })
+  }
 
-  if (storErr) return new Response(storErr.message, { status: 500 })
-
+  const admin = createAdminClient()
   const { data, error } = await admin
     .from('sporthouse_documents')
     .insert({
@@ -76,14 +78,16 @@ export async function POST(req: Request) {
       description: description?.trim() || null,
       file_type: ext,
       file_size: file.size,
-      storage_path: storagePath,
+      storage_provider: 'drive',
+      drive_file_id: driveFile.id,
       uploaded_by: user.email,
     })
     .select()
     .single()
 
   if (error) {
-    await admin.storage.from('sporthouse-internal').remove([storagePath])
+    console.error('DB insert error:', error)
+    try { await deleteFile(driveFile.id) } catch { /* best effort cleanup */ }
     return new Response(error.message, { status: 500 })
   }
 

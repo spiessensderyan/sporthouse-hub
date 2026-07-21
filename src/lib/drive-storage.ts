@@ -36,6 +36,19 @@ export function driveRootFolderId() {
   return process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ?? process.env.GOOGLE_PREASSIST_DRIVE_FOLDER_ID
 }
 
+// Sporthouse Intern documents (Financiën/Administratie) live in their own
+// Shared Drive with only the service account as a member — a hard isolation
+// boundary, independent of the shared root used by every other feature, so
+// staff access to client-file folders there can never imply visibility into
+// finance/admin docs.
+export function sporthouseRootFolderId() {
+  return process.env.GOOGLE_DRIVE_SPORTHOUSE_ROOT_FOLDER_ID
+}
+
+export function isSporthouseDriveConfigured() {
+  return !!(serviceAccountEmail() && serviceAccountKey() && sporthouseRootFolderId())
+}
+
 function getClient() {
   const email = serviceAccountEmail()
   const key   = serviceAccountKey()
@@ -80,7 +93,8 @@ export async function uploadFile(
   buffer: Buffer,
   filename: string,
   mimeType: string,
-  folderId: string
+  folderId: string,
+  options?: { public?: boolean }
 ): Promise<DriveUploadedFile> {
   const drive = getClient()
 
@@ -92,7 +106,7 @@ export async function uploadFile(
   }))
 
   const fileId = file.data.id!
-  await sharePublicly(fileId)
+  if (options?.public !== false) await sharePublicly(fileId)
 
   return {
     id:             fileId,
@@ -302,31 +316,40 @@ export async function getOrCreateFolder(name: string, parentId: string): Promise
   const claim = await claimOrAwaitFolder(parentId, name)
   if (!claim.claimed) return claim.folderId
 
-  const drive = getClient()
-  const escaped = name.replace(/'/g, "\\'")
-  const { data } = await drive.files.list({
-    q: `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
-    fields: 'files(id)',
-    spaces: 'drive',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-    corpora: 'allDrives',
-  })
-
-  let folderId = data.files?.[0]?.id
-  if (!folderId) {
-    const folder = await drive.files.create({
-      requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
-      fields: 'id',
+  // From here on, any throw must delete the pending row we just claimed —
+  // otherwise every future call for this (parent, name) pair polls it
+  // forever and times out, even once the underlying failure is fixed.
+  try {
+    const drive = getClient()
+    const escaped = name.replace(/'/g, "\\'")
+    const { data } = await drive.files.list({
+      q: `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+      fields: 'files(id)',
+      spaces: 'drive',
       supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: 'allDrives',
     })
-    folderId = folder.data.id!
+
+    let folderId = data.files?.[0]?.id
+    if (!folderId) {
+      const folder = await drive.files.create({
+        requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+        fields: 'id',
+        supportsAllDrives: true,
+      })
+      folderId = folder.data.id!
+    }
+
+    const admin = createAdminClient()
+    await admin.from('drive_folders').update({ drive_folder_id: folderId }).eq('id', claim.rowId)
+
+    return folderId
+  } catch (err) {
+    const admin = createAdminClient()
+    await admin.from('drive_folders').delete().eq('id', claim.rowId)
+    throw err
   }
-
-  const admin = createAdminClient()
-  await admin.from('drive_folders').update({ drive_folder_id: folderId }).eq('id', claim.rowId)
-
-  return folderId
 }
 
 export async function getOrCreateFolderPath(segments: string[], rootId: string): Promise<string> {
